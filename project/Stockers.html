@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stockers — India's Premium Market Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#04080f; --bg2:#070d1a;
+  --surface:rgba(255,255,255,0.035); --surface2:rgba(255,255,255,0.055);
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.12);
+  --text:#dce8ff; --text2:rgba(220,232,255,0.55); --text3:rgba(220,232,255,0.3);
+  --green:#00e676; --green-dim:rgba(0,230,118,0.08);
+  --red:#ff1744; --red-dim:rgba(255,23,68,0.08);
+  --cyan:#00e5ff; --cyan-dim:rgba(0,229,255,0.07); --cyan-glow:rgba(0,229,255,0.15);
+  --gold:#ffd740;
+  --mono:'JetBrains Mono',monospace; --sans:'Space Grotesk',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;position:relative}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.03) 3px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:9998}
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,0.022) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+.blob{position:fixed;border-radius:50%;filter:blur(90px);pointer-events:none;z-index:0}
+.b1{width:700px;height:700px;background:radial-gradient(circle,#0a2547 0%,transparent 70%);top:-200px;left:-150px;animation:bf1 28s ease-in-out infinite}
+.b2{width:500px;height:500px;background:radial-gradient(circle,#051d38 0%,transparent 70%);bottom:-100px;right:-100px;animation:bf2 22s ease-in-out infinite}
+.b3{width:350px;height:350px;background:radial-gradient(circle,#0d1f0d 0%,transparent 70%);top:45%;left:35%;animation:bf3 32s ease-in-out infinite}
+@keyframes bf1{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(60px,100px) scale(1.1)}66%{transform:translate(-40px,60px) scale(.92)}}
+@keyframes bf2{0%,100%{transform:translate(0,0)}50%{transform:translate(-80px,-70px) scale(1.15)}}
+@keyframes bf3{0%,100%{transform:translate(0,0)}50%{transform:translate(80px,-50px) scale(1.2)}}
+.scan-sweep{position:fixed;left:0;right:0;height:3px;z-index:1;pointer-events:none;background:linear-gradient(to bottom,transparent,rgba(0,229,255,0.05),transparent);animation:sweep 14s linear infinite}
+@keyframes sweep{0%{top:-3px}100%{top:100vh}}
+#app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;gap:14px;padding:8px 20px;background:rgba(4,8,15,0.9);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:500;box-shadow:0 1px 0 rgba(0,229,255,0.05),0 4px 24px rgba(0,0,0,0.4)}
+.logo{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--cyan);letter-spacing:2px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.search-zone{flex:1;max-width:400px;position:relative}
+.search-zone input{width:100%;padding:7px 13px 7px 34px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s}
+.search-zone input::placeholder{color:var(--text3)}
+.search-zone input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
+.s-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
+#searchDrop{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#0a1525;border:1px solid var(--border2);border-radius:10px;max-height:300px;overflow-y:auto;z-index:600;box-shadow:0 12px 40px rgba(0,0,0,0.6);display:none}
+#searchDrop.open{display:block}
+.sdr{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background .15s}
+.sdr:last-child{border-bottom:none}
+.sdr:hover{background:var(--surface2)}
+.sdr-l{display:flex;flex-direction:column;gap:1px}
+.sdr-sym{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--cyan)}
+.sdr-name{font-size:11px;color:var(--text2)}
+.sdr-r{text-align:right}
+.sdr-price{font-family:var(--mono);font-size:12px}
+.sdr-chg{font-size:11px;font-family:var(--mono)}
+.h-idx-wrap{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.h-idx{display:flex;align-items:center;gap:6px;padding:4px 11px;background:var(--surface);border:1px solid var(--border);border-radius:16px}
+.h-idx-lbl{font-size:9px;font-weight:700;color:var(--text2);letter-spacing:.7px;text-transform:uppercase}
+.h-idx-val{font-family:var(--mono);font-size:12px;font-weight:600}
+.h-idx-chg{font-family:var(--mono);font-size:10px}
+.live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.2);border-radius:16px;font-size:10px;font-weight:700;color:var(--green);white-space:nowrap}
+.pulse{width:6px;height:6px;background:var(--green);border-radius:50%;animation:dotpulse 2s ease-in-out infinite}
+@keyframes dotpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.4)}}
+/* Vintage Clock */
+#clockZone{display:flex;flex-direction:column;align-items:center;flex-shrink:0;cursor:default}
+#vintClock{filter:drop-shadow(0 0 6px rgba(200,160,40,0.25))}
+/* Google Login */
+.g-login-btn{display:flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;flex-shrink:0;white-space:nowrap}
+.g-login-btn:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.25)}
+.user-zone{display:flex;align-items:center;gap:8px;cursor:pointer;position:relative}
+.user-ava{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:1px solid var(--cyan);color:var(--bg);flex-shrink:0}
+.user-name{font-size:12px;font-weight:500;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+.user-menu{position:absolute;top:calc(100% + 8px);right:0;background:#0a1525;border:1px solid var(--border2);border-radius:10px;min-width:180px;z-index:600;box-shadow:0 12px 40px rgba(0,0,0,0.6);display:none}
+.user-menu.open{display:block}
+.user-menu-item{padding:10px 14px;font-size:13px;color:var(--text2);cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s}
+.user-menu-item:last-child{border-bottom:none;color:var(--red)}
+.user-menu-item:hover{background:var(--surface)}
+
+/* ── TICKER ── */
+.ticker-bar{overflow:hidden;background:rgba(7,13,26,0.8);border-bottom:1px solid var(--border);padding:5px 0;position:relative}
+.ticker-bar::before,.ticker-bar::after{content:'';position:absolute;top:0;bottom:0;width:60px;z-index:2;pointer-events:none}
+.ticker-bar::before{left:0;background:linear-gradient(to right,var(--bg),transparent)}
+.ticker-bar::after{right:0;background:linear-gradient(to left,var(--bg),transparent)}
+.ticker-track{display:flex;animation:tickerscroll 80s linear infinite;white-space:nowrap}
+@keyframes tickerscroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.ti{display:inline-flex;align-items:center;gap:5px;padding:0 16px;font-family:var(--mono);font-size:11px;border-right:1px solid var(--border)}
+.ti-sym{color:var(--text);font-weight:600}
+.ti-p{color:var(--text2)}
+.pos{color:var(--green)}
+.neg{color:var(--red)}
+
+/* ── TABS NAV ── */
+.tabs-nav{display:flex;gap:2px;padding:8px 20px;background:rgba(4,8,15,0.6);border-bottom:1px solid var(--border)}
+.tnb{padding:6px 16px;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.tnb:hover{color:var(--text);background:var(--surface)}
+.tnb.on{background:var(--cyan-dim);border-color:rgba(0,229,255,0.2);color:var(--cyan)}
+.wl-badge{background:rgba(0,229,255,0.14);color:var(--cyan);padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;font-family:var(--mono)}
+
+/* ── MAIN ── */
+main{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
+.tab-pane{display:none;flex-direction:column;gap:16px}
+.tab-pane.on{display:flex}
+
+/* ── INDEX SELECTOR ── */
+.idx-sel-wrap{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.idx-sel-wrap::-webkit-scrollbar{display:none}
+.idx-pill{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;flex-shrink:0;min-width:110px}
+.idx-pill:hover{border-color:var(--border2);background:var(--surface2)}
+.idx-pill.on{background:var(--cyan-dim);border-color:rgba(0,229,255,0.3)}
+.idx-pill-name{font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text2)}
+.idx-pill.on .idx-pill-name{color:var(--cyan)}
+.idx-pill-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
+.idx-pill-chg{font-family:var(--mono);font-size:11px}
+
+/* ── SECTION HEADERS ── */
+.sec-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:10px}
+.sec-title{font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--text2);text-transform:uppercase;margin-bottom:2px}
+.sec-sub{font-size:11px;color:var(--text3)}
+.hm-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hm-legend{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--text2)}
+.leg-sq{width:11px;height:11px;border-radius:2px}
+.nifty-live{display:flex;align-items:center;gap:8px}
+.nifty-num{font-family:var(--mono);font-size:20px;font-weight:700}
+.nifty-pill{font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:6px}
+
+/* ── HEATMAP ── */
+.hm-wrap{width:100%;height:430px;position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+.hm-block{position:absolute;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.35);transition:filter .18s}
+.hm-block:hover{filter:brightness(1.22);z-index:10}
+.hm-sym{font-family:var(--mono);font-weight:700;color:#fff;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,0.5);line-height:1.1}
+.hm-chg{font-family:var(--mono);color:rgba(255,255,255,0.88);text-align:center;text-shadow:0 1px 3px rgba(0,0,0,0.5)}
+.hm-sec{position:absolute;top:4px;left:5px;font-size:8px;color:rgba(255,255,255,0.4);font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+
+/* ── MOVERS ── */
+.movers-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.movers-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.movers-card-title{font-size:13px;font-weight:600;padding-bottom:10px;margin-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.mrow{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:7px;cursor:pointer;transition:background .15s}
+.mrow:hover{background:var(--surface2)}
+.m-rank{font-size:10px;color:var(--text3);font-family:var(--mono);width:14px;flex-shrink:0}
+.m-sym{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--cyan);width:96px;flex-shrink:0}
+.m-name{flex:1;font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-price{font-family:var(--mono);font-size:11px;color:var(--text);margin-right:4px}
+.m-chg{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:4px;min-width:64px;text-align:center}
+.m-chg.g{color:var(--green);background:var(--green-dim)}
+.m-chg.r{color:var(--red);background:var(--red-dim)}
+
+/* ── SECTORS ── */
+.sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
+.sec-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 12px;cursor:pointer;transition:all .2s;text-align:center}
+.sec-card:hover{border-color:var(--border2);background:var(--surface2);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.3)}
+.sec-card.active{border-color:rgba(0,229,255,0.35);background:var(--cyan-dim)}
+.sec-icon{font-size:24px;margin-bottom:6px}
+.sec-nm{font-size:13px;font-weight:600;margin-bottom:3px}
+.sec-chg{font-family:var(--mono);font-size:12px}
+.sec-cnt{font-size:10px;color:var(--text3);margin-top:3px}
+.sec-detail-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+.sec-detail-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.sec-hdr-btns{display:flex;gap:8px;align-items:center}
+.close-btn{background:none;border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:7px;cursor:pointer;font-family:var(--sans);font-size:12px;transition:all .2s}
+.close-btn:hover{border-color:var(--border2);color:var(--text)}
+.view-all-btn{background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.22);color:var(--cyan);padding:5px 14px;border-radius:7px;cursor:pointer;font-family:var(--sans);font-size:12px;font-weight:600;transition:all .2s}
+.view-all-btn:hover{background:var(--cyan-glow)}
+.sec-hm-wrap{width:100%;height:380px;position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+/* Sector all-stocks table */
+.sec-all-stocks{display:none;margin-top:14px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sec-all-stocks.open{display:block}
+.sa-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(255,255,255,0.015);border-bottom:1px solid var(--border)}
+.sa-title{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.8px;text-transform:uppercase}
+
+/* ── WATCHLIST ── */
+.wl-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.wl-top h2{font-size:17px;font-weight:600}
+.wl-add{display:flex;gap:8px;position:relative}
+.wl-add input{padding:8px 13px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;width:230px;transition:border-color .2s}
+.wl-add input:focus{border-color:var(--cyan)}
+.wl-add input::placeholder{color:var(--text3)}
+.btn-add{padding:8px 14px;background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.25);border-radius:8px;color:var(--cyan);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-add:hover{background:var(--cyan-glow)}
+#wlDrop{position:absolute;top:calc(100% + 4px);left:0;width:260px;background:#0a1525;border:1px solid var(--border2);border-radius:9px;z-index:600;display:none;box-shadow:0 12px 40px rgba(0,0,0,0.6);max-height:220px;overflow-y:auto}
+#wlDrop.open{display:block}
+.wl-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.015)}
+tbody td{padding:10px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.025)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--surface2)}
+.wl-sym-cell{font-family:var(--mono);font-weight:600;color:var(--cyan)}
+.wl-price-cell,.wl-chg-cell{font-family:var(--mono)}
+.tag{background:rgba(255,255,255,0.04);padding:2px 8px;border-radius:4px;font-size:11px}
+.btn-rm{background:none;border:1px solid rgba(255,23,68,0.25);color:var(--red);padding:3px 9px;border-radius:5px;cursor:pointer;font-size:11px;font-family:var(--sans);transition:all .2s}
+.btn-rm:hover{background:var(--red-dim);border-color:rgba(255,23,68,0.4)}
+.wl-empty{text-align:center;padding:60px 20px;color:var(--text2)}
+.wl-empty-icon{font-size:44px;margin-bottom:12px}
+
+/* ── STOCK POPUP ── */
+.popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:900;display:none}
+.popup-overlay.open{display:block}
+.stock-popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0b1624;border:1px solid rgba(0,229,255,0.25);border-radius:16px;padding:22px;width:330px;z-index:901;box-shadow:0 24px 80px rgba(0,0,0,0.7);display:none}
+.stock-popup.open{display:block}
+.popup-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.popup-close{background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1;padding:0}
+.popup-close:hover{color:var(--text)}
+.popup-price-block{background:rgba(255,255,255,0.03);border-radius:10px;padding:14px;margin-bottom:12px}
+.popup-price{font-family:var(--mono);font-size:30px;font-weight:700}
+.popup-chg{font-family:var(--mono);font-size:14px;margin-top:3px}
+.popup-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.popup-stat{background:rgba(255,255,255,0.03);border-radius:8px;padding:10px}
+.popup-stat-label{font-size:10px;color:var(--text3);margin-bottom:3px;letter-spacing:.5px;text-transform:uppercase}
+.popup-stat-val{font-size:13px;font-weight:500}
+.btn-wl-add{width:100%;padding:10px;background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.25);border-radius:9px;color:var(--cyan);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-wl-add:hover{background:var(--cyan-glow)}
+
+/* ── GOOGLE MODAL ── */
+.g-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:950;display:none}
+.g-overlay.open{display:block}
+.g-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;padding:36px 32px;width:320px;z-index:951;display:none;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
+.g-modal.open{display:block}
+.g-modal-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:24px}
+.g-modal-logo svg{flex-shrink:0}
+.g-modal-logo span{font-size:20px;font-weight:600;color:#202124;font-family:sans-serif}
+.g-modal h3{font-size:22px;font-weight:600;color:#202124;margin-bottom:8px;font-family:sans-serif}
+.g-modal p{font-size:14px;color:#5f6368;margin-bottom:20px;font-family:sans-serif}
+.g-modal input{width:100%;padding:10px 14px;border:1px solid #dadce0;border-radius:6px;font-size:14px;outline:none;color:#202124;margin-bottom:20px;font-family:sans-serif;transition:border-color .2s}
+.g-modal input:focus{border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.15)}
+.g-modal-btns{display:flex;justify-content:flex-end;gap:10px}
+.g-btn-cancel{padding:8px 18px;background:none;border:none;font-size:14px;color:#1a73e8;cursor:pointer;font-family:sans-serif;font-weight:500;border-radius:6px}
+.g-btn-cancel:hover{background:#f0f5ff}
+.g-btn-next{padding:8px 20px;background:#1a73e8;border:none;color:#fff;border-radius:6px;font-size:14px;cursor:pointer;font-family:sans-serif;font-weight:500}
+.g-btn-next:hover{background:#1557b0}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+</style>
+
+<template id="__bundler_thumbnail" data-bg-color="#04080f">
+  <svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="400" height="260" fill="#04080f"/>
+    <line x1="0" y1="65" x2="400" y2="65" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+    <line x1="0" y1="130" x2="400" y2="130" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+    <line x1="100" y1="0" x2="100" y2="260" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+    <line x1="200" y1="0" x2="200" y2="260" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+    <line x1="300" y1="0" x2="300" y2="260" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+    <rect x="10" y="30" width="130" height="110" rx="3" fill="#1b5e20"/>
+    <rect x="145" y="30" width="90" height="110" rx="3" fill="#00c853"/>
+    <rect x="240" y="30" width="70" height="50" rx="3" fill="#388e3c"/>
+    <rect x="315" y="30" width="75" height="50" rx="3" fill="#b71c1c"/>
+    <rect x="240" y="85" width="70" height="55" rx="3" fill="#c62828"/>
+    <rect x="315" y="85" width="75" height="55" rx="3" fill="#388e3c"/>
+    <rect x="10" y="145" width="80" height="80" rx="3" fill="#d50000"/>
+    <rect x="95" y="145" width="60" height="80" rx="3" fill="#1b5e20"/>
+    <rect x="160" y="145" width="75" height="80" rx="3" fill="#388e3c"/>
+    <rect x="240" y="145" width="55" height="80" rx="3" fill="#00c853"/>
+    <rect x="300" y="145" width="90" height="80" rx="3" fill="#b71c1c"/>
+    <text x="72" y="18" font-family="sans-serif" font-size="13" font-weight="700" fill="#00e5ff" letter-spacing="2">STOCKERS</text>
+    <rect x="0" y="238" width="400" height="22" fill="rgba(7,13,26,0.9)"/>
+  </svg>
+</template>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<div class="grid-bg"></div>
+<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+<div class="scan-sweep"></div>
+
+<div id="app">
+
+<!-- ── HEADER ── -->
+<header>
+  <!-- BULL/BEAR + LOGO -->
+  <div class="logo">
+    <svg width="54" height="28" viewBox="0 0 54 28" fill="none">
+      <!-- BULL: green, charging right/up -->
+      <ellipse cx="12" cy="18" rx="9" ry="6" fill="#0a2014" stroke="#00e676" stroke-width="1.2"/>
+      <ellipse cx="20" cy="15" rx="5" ry="5" fill="#0a2014" stroke="#00e676" stroke-width="1.2"/>
+      <path d="M18,11 Q15,5 19.5,8" stroke="#00e676" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <path d="M22,11 Q25,5 20.5,8" stroke="#00e676" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <line x1="6" y1="23" x2="5" y2="27" stroke="#00e676" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="10" y1="23.5" x2="9" y2="27" stroke="#00e676" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="14" y1="23.5" x2="13" y2="27" stroke="#00e676" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M3,16 Q1,13 2,18" stroke="#00e676" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+      <!-- divider -->
+      <line x1="27" y1="2" x2="27" y2="26" stroke="rgba(220,232,255,0.12)" stroke-width="0.8"/>
+      <text x="27" y="18" text-anchor="middle" fill="rgba(200,232,255,0.2)" font-family="Georgia,serif" font-size="5" font-style="italic">VS</text>
+      <!-- BEAR: red, hunched left -->
+      <ellipse cx="42" cy="18" rx="9" ry="6" fill="#200a0a" stroke="#ff1744" stroke-width="1.2"/>
+      <ellipse cx="34" cy="15" rx="5" ry="5" fill="#200a0a" stroke="#ff1744" stroke-width="1.2"/>
+      <circle cx="32" cy="11" r="2.2" fill="#200a0a" stroke="#ff1744" stroke-width="1"/>
+      <circle cx="36" cy="10" r="2" fill="#200a0a" stroke="#ff1744" stroke-width="1"/>
+      <line x1="29" y1="22" x2="27" y2="26" stroke="#ff1744" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="32" y1="23" x2="30" y2="27" stroke="#ff1744" stroke-width="1.3" stroke-linecap="round"/>
+      <line x1="35" y1="23" x2="33" y2="27" stroke="#ff1744" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M51,16 Q53,13 52,18" stroke="#ff1744" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    </svg>
+    STOCKERS
+  </div>
+
+  <div class="search-zone">
+    <span class="s-icon">⌕</span>
+    <input id="searchInput" type="text" placeholder="Search… RELIANCE, TCS, INFY" autocomplete="off">
+    <div id="searchDrop"></div>
+  </div>
+
+  <div class="h-idx-wrap">
+    <div class="h-idx"><span class="h-idx-lbl">NIFTY 50</span><span class="h-idx-val" id="hN50">24,765</span><span class="h-idx-chg pos">▲1.40%</span></div>
+    <div class="h-idx"><span class="h-idx-lbl">SENSEX</span><span class="h-idx-val">81,345</span><span class="h-idx-chg pos">▲1.18%</span></div>
+    <div class="h-idx"><span class="h-idx-lbl">BANK NIFTY</span><span class="h-idx-val">52,134</span><span class="h-idx-chg neg">▼0.32%</span></div>
+  </div>
+
+  <div class="live-badge"><span class="pulse"></span>NSE LIVE</div>
+
+  <!-- VINTAGE CLOCK -->
+  <div id="clockZone">
+    <svg id="vintClock" viewBox="0 0 56 56" width="52" height="52">
+      <!-- Hands will be drawn by JS; face built by setupClock() -->
+      <line id="hHand" stroke="#c8a84b" stroke-width="2.8" stroke-linecap="round"/>
+      <line id="mHand" stroke="#d4b86a" stroke-width="1.6" stroke-linecap="round"/>
+      <line id="sHand" stroke="#ff4444" stroke-width="0.9" stroke-linecap="round"/>
+      <circle id="clockCap" cx="28" cy="28" r="2.6" fill="#c8a84b"/>
+      <circle cx="28" cy="28" r="1.1" fill="#3d2800"/>
+    </svg>
+  </div>
+
+  <!-- GOOGLE LOGIN -->
+  <div id="authZone">
+    <button class="g-login-btn" id="loginBtn" onclick="openGoogleModal()">
+      <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      Sign in
+    </button>
+  </div>
+</header>
+
+<!-- TICKER TAPE -->
+<div class="ticker-bar"><div class="ticker-track" id="tickerTrack"></div></div>
+
+<!-- TABS -->
+<div class="tabs-nav">
+  <button class="tnb on" id="tb-market" onclick="goTab('market')">📊 Market Overview</button>
+  <button class="tnb" id="tb-sectors" onclick="goTab('sectors')">🏭 Sectors</button>
+  <button class="tnb" id="tb-watchlist" onclick="goTab('watchlist')">⭐ Watchlist <span class="wl-badge" id="wlBadge">0</span></button>
+</div>
+
+<main>
+
+  <!-- ═══ MARKET TAB ═══ -->
+  <div class="tab-pane on" id="pane-market">
+    <!-- Index Selector -->
+    <div class="idx-sel-wrap" id="idxSelector"></div>
+
+    <!-- Heatmap -->
+    <div>
+      <div class="sec-hdr">
+        <div>
+          <div class="sec-title" id="hmTitle">NIFTY 50 — HEAT MAP</div>
+          <div class="sec-sub">Block size = Market Cap &nbsp;·&nbsp; Color = Daily Change %</div>
+        </div>
+        <div class="hm-meta">
+          <div class="hm-legend">
+            <div class="leg-sq" style="background:#00c853"></div><span>&gt;+4%</span>
+            <div class="leg-sq" style="background:#388e3c"></div><span>+2%</span>
+            <div class="leg-sq" style="background:#1b5e20"></div><span>0%</span>
+            <div class="leg-sq" style="background:#b71c1c"></div><span>−2%</span>
+            <div class="leg-sq" style="background:#d32f2f"></div><span>&lt;−4%</span>
+          </div>
+          <div class="nifty-live">
+            <span class="nifty-num" id="niftyNum">24,765.20</span>
+            <span class="nifty-pill pos" id="niftyPill" style="background:var(--green-dim)">▲ +1.40%</span>
+          </div>
+        </div>
+      </div>
+      <div class="hm-wrap" id="mainHeatmap"></div>
+    </div>
+
+    <div class="movers-row">
+      <div class="movers-card">
+        <div class="movers-card-title pos"><span>▲</span> Top Gainers Today</div>
+        <div id="gainersEl"></div>
+      </div>
+      <div class="movers-card">
+        <div class="movers-card-title neg"><span>▼</span> Top Losers Today</div>
+        <div id="losersEl"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SECTORS TAB ═══ -->
+  <div class="tab-pane" id="pane-sectors">
+    <div>
+      <div class="sec-title" style="margin-bottom:14px">SECTOR OVERVIEW — Click any sector to view stock heatmap</div>
+      <div class="sector-grid" id="sectorGrid"></div>
+    </div>
+    <div id="secDetailWrap" style="display:none">
+      <div class="sec-detail-wrap">
+        <div class="sec-detail-hdr">
+          <div>
+            <div class="sec-title" id="secDetailTitle">IT SECTOR</div>
+            <div class="sec-sub" id="secDetailSub"></div>
+          </div>
+          <div class="sec-hdr-btns">
+            <button class="view-all-btn" id="viewAllBtn" onclick="toggleViewAll()">View All Stocks ▾</button>
+            <button class="close-btn" onclick="closeSecDetail()">✕ Close</button>
+          </div>
+        </div>
+        <div class="sec-hm-wrap" id="secHeatmap"></div>
+        <div class="sec-all-stocks" id="secAllStocks">
+          <div class="sa-hdr"><span class="sa-title" id="saTitle">All Stocks</span><span style="font-size:11px;color:var(--text3)">Click row to open detail</span></div>
+          <table><thead><tr><th>#</th><th>Symbol</th><th>Company</th><th>Price (₹)</th><th>Change</th><th>Mkt Cap</th></tr></thead><tbody id="secAllBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ WATCHLIST TAB ═══ -->
+  <div class="tab-pane" id="pane-watchlist">
+    <div class="wl-top">
+      <h2>⭐ My Watchlist</h2>
+      <div class="wl-add">
+        <input id="wlInput" type="text" placeholder="Search stock to add…" autocomplete="off">
+        <div id="wlDrop"></div>
+        <button class="btn-add" onclick="wlAdd()">+ Add</button>
+      </div>
+    </div>
+    <div id="wlContent"></div>
+  </div>
+
+</main>
+</div><!-- /#app -->
+
+<!-- STOCK POPUP -->
+<div class="popup-overlay" id="popOverlay" onclick="closePopup()"></div>
+<div class="stock-popup" id="stockPopup">
+  <div class="popup-hdr">
+    <div>
+      <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--cyan)" id="popSym">–</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px" id="popName">–</div>
+    </div>
+    <button class="popup-close" onclick="closePopup()">×</button>
+  </div>
+  <div class="popup-price-block">
+    <div class="popup-price" id="popPrice">–</div>
+    <div class="popup-chg" id="popChg">–</div>
+  </div>
+  <div class="popup-grid">
+    <div class="popup-stat"><div class="popup-stat-label">Sector</div><div class="popup-stat-val" id="popSector">–</div></div>
+    <div class="popup-stat"><div class="popup-stat-label">Market Cap</div><div class="popup-stat-val" id="popMcap">–</div></div>
+    <div class="popup-stat"><div class="popup-stat-label">52W High</div><div class="popup-stat-val" id="popHigh">–</div></div>
+    <div class="popup-stat"><div class="popup-stat-label">52W Low</div><div class="popup-stat-val" id="popLow">–</div></div>
+  </div>
+  <button class="btn-wl-add" onclick="popAddWl()">⭐ Add to Watchlist</button>
+</div>
+
+<!-- GOOGLE MODAL -->
+<div class="g-overlay" id="gOverlay" onclick="closeGoogleModal()"></div>
+<div class="g-modal" id="gModal">
+  <div class="g-modal-logo">
+    <svg viewBox="0 0 24 24" width="32" height="32"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+    <span>Sign in with Google</span>
+  </div>
+  <h3>Welcome to Stockers</h3>
+  <p>Enter your email to continue</p>
+  <input type="email" id="gEmailInput" value="trader@gmail.com" placeholder="Email">
+  <div class="g-modal-btns">
+    <button class="g-btn-cancel" onclick="closeGoogleModal()">Cancel</button>
+    <button class="g-btn-next" onclick="doGoogleLogin()">Continue</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════
+const STOCKS = [
+  // ─ BANKING (15)
+  {sym:'HDFCBANK',   name:'HDFC Bank',                price:1723.45, chg:0.54,  mcap:12.4, sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'ICICIBANK',  name:'ICICI Bank',               price:1089.30, chg:1.87,  mcap:7.7,  sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'KOTAKBANK',  name:'Kotak Mahindra Bank',      price:1876.40, chg:0.91,  mcap:3.7,  sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'SBIN',       name:'State Bank of India',      price:823.60,  chg:3.21,  mcap:3.7,  sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'AXISBANK',   name:'Axis Bank',                price:1145.30, chg:-0.45, mcap:3.5,  sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'INDUSINDBK', name:'IndusInd Bank',            price:1167.50, chg:-2.67, mcap:0.96, sector:'Banking',  idx:['n50','bnk','n100','n200']},
+  {sym:'BANDHANBNK', name:'Bandhan Bank',             price:187.50,  chg:-1.23, mcap:0.30, sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'FEDERALBNK', name:'Federal Bank',             price:167.80,  chg:0.78,  mcap:0.42, sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'IDFCFIRSTB', name:'IDFC First Bank',          price:78.50,   chg:-0.45, mcap:0.55, sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'AUBANK',     name:'AU Small Finance Bank',    price:678.90,  chg:1.34,  mcap:0.50, sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'PNB',        name:'Punjab National Bank',     price:102.30,  chg:2.34,  mcap:1.2,  sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'CANARABANK', name:'Canara Bank',              price:97.80,   chg:1.67,  mcap:0.89, sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'BANKBARODA', name:'Bank of Baroda',           price:213.50,  chg:0.89,  mcap:1.1,  sector:'Banking',  idx:['bnk','nxt50','n100','n200']},
+  {sym:'RBLBANK',    name:'RBL Bank',                 price:167.30,  chg:-1.56, mcap:0.18, sector:'Banking',  idx:['bnk','mid','n200']},
+  {sym:'YESBANK',    name:'Yes Bank',                 price:19.85,   chg:0.56,  mcap:0.62, sector:'Banking',  idx:['bnk','mid','n200']},
+  // ─ IT (15)
+  {sym:'TCS',        name:'Tata Consultancy Svcs',    price:3542.80, chg:-0.87, mcap:12.9, sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'INFY',       name:'Infosys',                  price:1587.60, chg:-1.23, mcap:6.6,  sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'HCLTECH',    name:'HCL Technologies',         price:1456.80, chg:0.67,  mcap:3.9,  sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'WIPRO',      name:'Wipro',                    price:456.70,  chg:-1.89, mcap:2.4,  sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'LTIM',       name:'LTIMindtree',              price:5678.90, chg:-1.67, mcap:1.7,  sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'TECHM',      name:'Tech Mahindra',            price:1234.50, chg:-1.45, mcap:1.2,  sector:'IT',       idx:['n50','nit','n100','n200']},
+  {sym:'MPHASIS',    name:'Mphasis',                  price:2456.70, chg:0.89,  mcap:0.46, sector:'IT',       idx:['nxt50','nit','n100','n200']},
+  {sym:'PERSISTENT', name:'Persistent Systems',       price:4567.80, chg:2.34,  mcap:0.70, sector:'IT',       idx:['nxt50','nit','n100','n200']},
+  {sym:'COFORGE',    name:'Coforge',                  price:5670.90, chg:-1.23, mcap:0.35, sector:'IT',       idx:['mid','nit','n200']},
+  {sym:'KPIT',       name:'KPIT Technologies',        price:1234.50, chg:3.45,  mcap:0.34, sector:'IT',       idx:['mid','nit','n200']},
+  {sym:'HAPPYMNDS',  name:'Happiest Minds Tech',      price:756.30,  chg:1.89,  mcap:0.11, sector:'IT',       idx:['sml','nit']},
+  {sym:'MASTEK',     name:'Mastek',                   price:2345.60, chg:-0.67, mcap:0.09, sector:'IT',       idx:['sml','nit']},
+  {sym:'BSOFT',      name:'Birlasoft',                price:567.80,  chg:2.12,  mcap:0.16, sector:'IT',       idx:['mid','nit','n200']},
+  {sym:'ZENSARTECH', name:'Zensar Technologies',      price:678.90,  chg:-1.34, mcap:0.08, sector:'IT',       idx:['sml','nit']},
+  {sym:'NAUKRI',     name:'Info Edge (Naukri)',        price:6789.30, chg:0.45,  mcap:0.87, sector:'IT',       idx:['nxt50','nit','n100','n200']},
+  // ─ ENERGY (8)
+  {sym:'RELIANCE',   name:'Reliance Industries',      price:2847.50, chg:1.23,  mcap:19.2, sector:'Energy',   idx:['n50','n100','n200']},
+  {sym:'ONGC',       name:'ONGC',                     price:267.80,  chg:2.67,  mcap:3.4,  sector:'Energy',   idx:['n50','n100','n200']},
+  {sym:'BPCL',       name:'Bharat Petroleum',         price:345.60,  chg:1.45,  mcap:1.5,  sector:'Energy',   idx:['n50','n100','n200']},
+  {sym:'IOC',        name:'Indian Oil Corp',          price:167.80,  chg:0.89,  mcap:2.4,  sector:'Energy',   idx:['nxt50','n100','n200']},
+  {sym:'GAIL',       name:'GAIL India',               price:234.50,  chg:1.34,  mcap:1.5,  sector:'Energy',   idx:['nxt50','n100','n200']},
+  {sym:'PETRONET',   name:'Petronet LNG',             price:267.80,  chg:0.45,  mcap:0.40, sector:'Energy',   idx:['nxt50','n100','n200']},
+  {sym:'OIL',        name:'Oil India',                price:456.70,  chg:2.12,  mcap:0.50, sector:'Energy',   idx:['mid','n200']},
+  {sym:'MRPL',       name:'MRPL',                     price:178.50,  chg:1.67,  mcap:0.31, sector:'Energy',   idx:['mid','n200']},
+  // ─ FMCG (11)
+  {sym:'HINDUNILVR', name:'Hindustan Unilever',       price:2456.75, chg:0.34,  mcap:5.8,  sector:'FMCG',     idx:['n50','n100','n200']},
+  {sym:'ITC',        name:'ITC Ltd',                  price:456.80,  chg:2.14,  mcap:5.7,  sector:'FMCG',     idx:['n50','n100','n200']},
+  {sym:'NESTLEIND',  name:'Nestle India',             price:2456.80, chg:0.34,  mcap:2.4,  sector:'FMCG',     idx:['n50','n100','n200']},
+  {sym:'BRITANNIA',  name:'Britannia Industries',     price:4567.80, chg:-0.34, mcap:1.1,  sector:'FMCG',     idx:['n50','n100','n200']},
+  {sym:'TATACONSUM', name:'Tata Consumer Products',   price:987.60,  chg:0.89,  mcap:0.9,  sector:'FMCG',     idx:['n50','n100','n200']},
+  {sym:'DABUR',      name:'Dabur India',              price:567.80,  chg:1.23,  mcap:1.0,  sector:'FMCG',     idx:['nxt50','n100','n200']},
+  {sym:'MARICO',     name:'Marico',                   price:567.80,  chg:0.78,  mcap:0.73, sector:'FMCG',     idx:['nxt50','n100','n200']},
+  {sym:'COLPAL',     name:'Colgate-Palmolive India',  price:2345.60, chg:-0.56, mcap:0.64, sector:'FMCG',     idx:['nxt50','n100','n200']},
+  {sym:'GODREJCP',   name:'Godrej Consumer Products', price:1234.50, chg:0.34,  mcap:1.3,  sector:'FMCG',     idx:['nxt50','n100','n200']},
+  {sym:'EMAMILTD',   name:'Emami',                    price:678.90,  chg:-0.89, mcap:0.24, sector:'FMCG',     idx:['mid','n200']},
+  {sym:'VBL',        name:'Varun Beverages',          price:567.80,  chg:2.34,  mcap:0.73, sector:'FMCG',     idx:['nxt50','n100','n200']},
+  // ─ AUTO (12)
+  {sym:'MARUTI',     name:'Maruti Suzuki',            price:12456.30,chg:0.78,  mcap:3.8,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'TATAMOTORS', name:'Tata Motors',              price:987.60,  chg:-3.12, mcap:3.6,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'M&M',        name:'Mahindra & Mahindra',      price:2345.60, chg:1.34,  mcap:2.9,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'BAJAJ-AUTO', name:'Bajaj Auto',               price:8967.30, chg:1.78,  mcap:2.6,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'EICHERMOT',  name:'Eicher Motors',            price:4567.80, chg:-0.67, mcap:1.2,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'HEROMOTOCO', name:'Hero MotoCorp',            price:4567.80, chg:0.56,  mcap:0.9,  sector:'Auto',     idx:['n50','n100','n200']},
+  {sym:'TVSMOTOR',   name:'TVS Motor Company',        price:2345.60, chg:2.45,  mcap:1.1,  sector:'Auto',     idx:['nxt50','n100','n200']},
+  {sym:'ASHOKLEY',   name:'Ashok Leyland',            price:234.50,  chg:1.23,  mcap:0.69, sector:'Auto',     idx:['nxt50','n100','n200']},
+  {sym:'MRF',        name:'MRF',                      price:145678.90,chg:0.34, mcap:0.62, sector:'Auto',     idx:['nxt50','n100','n200']},
+  {sym:'BOSCHLTD',   name:'Bosch India',              price:34567.80,chg:-0.45, mcap:0.40, sector:'Auto',     idx:['mid','n200']},
+  {sym:'EXIDEIND',   name:'Exide Industries',         price:456.70,  chg:0.89,  mcap:0.39, sector:'Auto',     idx:['mid','n200']},
+  {sym:'BALKRISIND', name:'Balkrishna Industries',    price:2456.70, chg:1.34,  mcap:0.48, sector:'Auto',     idx:['nxt50','n100','n200']},
+  // ─ FINANCE / NBFC (11)
+  {sym:'BAJFINANCE', name:'Bajaj Finance',            price:7234.50, chg:-2.34, mcap:4.4,  sector:'Finance',  idx:['n50','n100','n200']},
+  {sym:'BAJAJFINSV', name:'Bajaj Finserv',            price:1678.90, chg:-1.23, mcap:2.7,  sector:'Finance',  idx:['n50','n100','n200']},
+  {sym:'HDFCLIFE',   name:'HDFC Life Insurance',      price:678.90,  chg:0.45,  mcap:1.4,  sector:'Finance',  idx:['n50','n100','n200']},
+  {sym:'SBILIFE',    name:'SBI Life Insurance',       price:1567.80, chg:1.23,  mcap:1.6,  sector:'Finance',  idx:['n50','n100','n200']},
+  {sym:'SHRIRAMFIN', name:'Shriram Finance',          price:2567.80, chg:2.89,  mcap:0.97, sector:'Finance',  idx:['n50','n100','n200']},
+  {sym:'CHOLAFIN',   name:'Cholamandalam Finance',    price:1234.50, chg:1.89,  mcap:0.81, sector:'Finance',  idx:['nxt50','n100','n200']},
+  {sym:'MUTHOOTFIN', name:'Muthoot Finance',          price:1987.60, chg:2.34,  mcap:0.79, sector:'Finance',  idx:['nxt50','n100','n200']},
+  {sym:'PFC',        name:'Power Finance Corp',       price:456.70,  chg:1.56,  mcap:1.5,  sector:'Finance',  idx:['nxt50','n100','n200']},
+  {sym:'RECLTD',     name:'REC Limited',              price:567.80,  chg:1.89,  mcap:1.5,  sector:'Finance',  idx:['nxt50','n100','n200']},
+  {sym:'PAYTM',      name:'One97 Comm (Paytm)',       price:456.70,  chg:2.78,  mcap:0.29, sector:'Finance',  idx:['mid','n200']},
+  {sym:'LICHSGFIN',  name:'LIC Housing Finance',      price:678.90,  chg:0.89,  mcap:0.34, sector:'Finance',  idx:['mid','n200']},
+  // ─ PHARMA (11)
+  {sym:'SUNPHARMA',  name:'Sun Pharmaceutical',       price:1567.40, chg:2.45,  mcap:3.8,  sector:'Pharma',   idx:['n50','n100','n200']},
+  {sym:'DRREDDY',    name:"Dr. Reddy's Labs",         price:5678.90, chg:3.45,  mcap:2.4,  sector:'Pharma',   idx:['n50','n100','n200']},
+  {sym:'CIPLA',      name:'Cipla',                    price:1567.80, chg:-0.78, mcap:1.3,  sector:'Pharma',   idx:['n50','n100','n200']},
+  {sym:'DIVISLAB',   name:"Divi's Laboratories",      price:4567.80, chg:2.34,  mcap:1.2,  sector:'Pharma',   idx:['n50','n100','n200']},
+  {sym:'TORNTPHARM', name:'Torrent Pharma',           price:2345.60, chg:1.67,  mcap:0.79, sector:'Pharma',   idx:['nxt50','n100','n200']},
+  {sym:'ALKEM',      name:'Alkem Laboratories',       price:4567.80, chg:-0.89, mcap:0.55, sector:'Pharma',   idx:['nxt50','n100','n200']},
+  {sym:'LUPIN',      name:'Lupin',                    price:1987.60, chg:1.23,  mcap:0.90, sector:'Pharma',   idx:['nxt50','n100','n200']},
+  {sym:'ABBOTINDIA', name:'Abbott India',             price:23456.70,chg:0.34,  mcap:0.50, sector:'Pharma',   idx:['mid','n200']},
+  {sym:'BIOCON',     name:'Biocon',                   price:345.60,  chg:-1.23, mcap:0.42, sector:'Pharma',   idx:['nxt50','n100','n200']},
+  {sym:'GLAXO',      name:'GSK Pharma India',         price:1987.60, chg:0.56,  mcap:0.34, sector:'Pharma',   idx:['mid','n200']},
+  {sym:'PFIZER',     name:'Pfizer India',             price:4567.80, chg:1.12,  mcap:0.21, sector:'Pharma',   idx:['mid','n200']},
+  // ─ INFRA (8)
+  {sym:'LT',         name:'Larsen & Toubro',          price:3467.20, chg:1.56,  mcap:4.9,  sector:'Infra',    idx:['n50','n100','n200']},
+  {sym:'ADANIENT',   name:'Adani Enterprises',        price:2456.30, chg:2.12,  mcap:2.8,  sector:'Infra',    idx:['n50','n100','n200']},
+  {sym:'ADANIPORTS', name:'Adani Ports & SEZ',        price:1234.50, chg:1.67,  mcap:2.7,  sector:'Infra',    idx:['n50','n100','n200']},
+  {sym:'GMRAIRPORT', name:'GMR Airports Infra',       price:87.50,   chg:2.34,  mcap:0.53, sector:'Infra',    idx:['mid','n200']},
+  {sym:'IRCON',      name:'IRCON International',      price:234.50,  chg:3.45,  mcap:0.22, sector:'Infra',    idx:['mid','n200']},
+  {sym:'RVNL',       name:'Rail Vikas Nigam',         price:456.70,  chg:4.56,  mcap:0.95, sector:'Infra',    idx:['nxt50','n100','n200']},
+  {sym:'NBCC',       name:'NBCC India',               price:89.50,   chg:1.89,  mcap:0.16, sector:'Infra',    idx:['sml']},
+  {sym:'IRB',        name:'IRB Infrastructure',       price:56.70,   chg:2.67,  mcap:0.20, sector:'Infra',    idx:['mid','n200']},
+  // ─ POWER (8)
+  {sym:'NTPC',       name:'NTPC',                     price:345.60,  chg:1.89,  mcap:3.4,  sector:'Power',    idx:['n50','n100','n200']},
+  {sym:'POWERGRID',  name:'Power Grid Corp',          price:234.50,  chg:0.45,  mcap:2.2,  sector:'Power',    idx:['n50','n100','n200']},
+  {sym:'COALINDIA',  name:'Coal India',               price:456.70,  chg:0.89,  mcap:2.8,  sector:'Power',    idx:['n50','n100','n200']},
+  {sym:'ADANIPOWER', name:'Adani Power',              price:567.80,  chg:3.45,  mcap:2.2,  sector:'Power',    idx:['nxt50','n100','n200']},
+  {sym:'TATAPOWER',  name:'Tata Power Company',       price:456.70,  chg:2.34,  mcap:1.5,  sector:'Power',    idx:['nxt50','n100','n200']},
+  {sym:'TORNTPOWER', name:'Torrent Power',            price:1234.50, chg:1.67,  mcap:0.59, sector:'Power',    idx:['mid','n200']},
+  {sym:'CESC',       name:'CESC',                     price:189.50,  chg:0.89,  mcap:0.25, sector:'Power',    idx:['mid','n200']},
+  {sym:'NHPC',       name:'NHPC',                     price:89.50,   chg:1.23,  mcap:0.90, sector:'Power',    idx:['nxt50','n100','n200']},
+  // ─ DEFENCE (6)
+  {sym:'BEL',        name:'Bharat Electronics',       price:245.60,  chg:4.56,  mcap:1.8,  sector:'Defence',  idx:['n50','n100','n200']},
+  {sym:'HAL',        name:'Hindustan Aeronautics',    price:4567.80, chg:2.89,  mcap:1.5,  sector:'Defence',  idx:['nxt50','n100','n200']},
+  {sym:'BEML',       name:'BEML',                     price:3456.70, chg:1.23,  mcap:0.14, sector:'Defence',  idx:['mid','n200']},
+  {sym:'BHEL',       name:'Bharat Heavy Electricals', price:267.80,  chg:3.45,  mcap:0.94, sector:'Defence',  idx:['nxt50','n100','n200']},
+  {sym:'COCHINSHIP', name:'Cochin Shipyard',          price:1678.90, chg:5.67,  mcap:0.22, sector:'Defence',  idx:['mid','n200']},
+  {sym:'MAZDOCK',    name:'Mazagon Dock',             price:4567.80, chg:4.12,  mcap:0.46, sector:'Defence',  idx:['mid','n200']},
+  // ─ CONSUMER (8)
+  {sym:'TITAN',      name:'Titan Company',            price:3456.70, chg:-0.56, mcap:3.1,  sector:'Consumer', idx:['n50','n100','n200']},
+  {sym:'ASIANPAINT', name:'Asian Paints',             price:2678.90, chg:-1.67, mcap:2.6,  sector:'Consumer', idx:['n50','n100','n200']},
+  {sym:'ZOMATO',     name:'Zomato',                   price:234.50,  chg:4.12,  mcap:2.1,  sector:'Consumer', idx:['n50','n100','n200']},
+  {sym:'NYKAA',      name:'Nykaa (FSN E-Comm)',       price:178.30,  chg:-1.56, mcap:0.51, sector:'Consumer', idx:['mid','n200']},
+  {sym:'HAVELLS',    name:'Havells India',            price:1678.90, chg:0.89,  mcap:1.1,  sector:'Consumer', idx:['nxt50','n100','n200']},
+  {sym:'VOLTAS',     name:'Voltas',                   price:1456.70, chg:1.34,  mcap:0.48, sector:'Consumer', idx:['nxt50','n100','n200']},
+  {sym:'CROMPTON',   name:'Crompton Greaves Consumer',price:345.60,  chg:-0.67, mcap:0.22, sector:'Consumer', idx:['mid','n200']},
+  {sym:'VGUARD',     name:'V-Guard Industries',       price:345.60,  chg:1.23,  mcap:0.15, sector:'Consumer', idx:['sml']},
+  // ─ HEALTHCARE (5)
+  {sym:'APOLLOHOSP', name:'Apollo Hospitals',         price:6789.30, chg:3.12,  mcap:0.98, sector:'Healthcare',idx:['n50','n100','n200']},
+  {sym:'MAXHEALTH',  name:'Max Healthcare',           price:987.60,  chg:2.45,  mcap:0.97, sector:'Healthcare',idx:['nxt50','n100','n200']},
+  {sym:'FORTIS',     name:'Fortis Healthcare',        price:567.80,  chg:1.89,  mcap:0.43, sector:'Healthcare',idx:['nxt50','n100','n200']},
+  {sym:'ASTER',      name:'Aster DM Healthcare',      price:345.60,  chg:0.78,  mcap:0.19, sector:'Healthcare',idx:['mid','n200']},
+  {sym:'NARAYNAHLT', name:'Narayana Hrudayalaya',     price:1234.50, chg:1.34,  mcap:0.25, sector:'Healthcare',idx:['mid','n200']},
+  // ─ CEMENT (7)
+  {sym:'ULTRACEMCO', name:'UltraTech Cement',         price:10234.50,chg:1.23,  mcap:3.0,  sector:'Cement',   idx:['n50','n100','n200']},
+  {sym:'GRASIM',     name:'Grasim Industries',        price:2345.60, chg:0.34,  mcap:1.5,  sector:'Cement',   idx:['n50','n100','n200']},
+  {sym:'AMBUJACEMENT',name:'Ambuja Cements',          price:567.80,  chg:0.89,  mcap:1.1,  sector:'Cement',   idx:['nxt50','n100','n200']},
+  {sym:'ACC',        name:'ACC',                      price:1987.60, chg:-0.45, mcap:0.37, sector:'Cement',   idx:['nxt50','n100','n200']},
+  {sym:'SHREECEM',   name:'Shree Cement',             price:23456.70,chg:-0.23, mcap:0.85, sector:'Cement',   idx:['nxt50','n100','n200']},
+  {sym:'RAMCOCEM',   name:'Ramco Cements',            price:789.50,  chg:1.23,  mcap:0.19, sector:'Cement',   idx:['mid','n200']},
+  {sym:'DALMIACEM',  name:'Dalmia Bharat',            price:1987.60, chg:0.67,  mcap:0.38, sector:'Cement',   idx:['nxt50','n100','n200']},
+  // ─ METALS (8)
+  {sym:'JSWSTEEL',   name:'JSW Steel',                price:876.50,  chg:-2.34, mcap:2.1,  sector:'Metals',   idx:['n50','n100','n200']},
+  {sym:'TATASTEEL',  name:'Tata Steel',               price:167.80,  chg:-1.56, mcap:2.1,  sector:'Metals',   idx:['n50','n100','n200']},
+  {sym:'HINDALCO',   name:'Hindalco Industries',      price:678.90,  chg:-2.89, mcap:1.5,  sector:'Metals',   idx:['n50','n100','n200']},
+  {sym:'SAIL',       name:'SAIL',                     price:134.50,  chg:-1.23, mcap:0.56, sector:'Metals',   idx:['nxt50','n100','n200']},
+  {sym:'VEDL',       name:'Vedanta',                  price:456.70,  chg:-0.89, mcap:1.7,  sector:'Metals',   idx:['nxt50','n100','n200']},
+  {sym:'NMDC',       name:'NMDC',                     price:234.50,  chg:1.23,  mcap:0.69, sector:'Metals',   idx:['nxt50','n100','n200']},
+  {sym:'NATIONALUM', name:'National Aluminium Co',    price:178.50,  chg:2.34,  mcap:0.33, sector:'Metals',   idx:['mid','n200']},
+  {sym:'APLAPOLLO',  name:'APL Apollo Tubes',         price:1678.90, chg:0.89,  mcap:0.22, sector:'Metals',   idx:['mid','n200']},
+];
+
+const INDICES = [
+  {id:'n50',   label:'NIFTY 50',       val:24765.20, chg:+1.40, tags:['n50']},
+  {id:'bnk',   label:'BANK NIFTY',     val:52134.80, chg:-0.32, tags:['bnk']},
+  {id:'nxt50', label:'NIFTY NEXT 50',  val:64234.50, chg:+0.89, tags:['nxt50']},
+  {id:'n100',  label:'NIFTY 100',      val:25123.45, chg:+1.22, tags:['n50','nxt50']},
+  {id:'n200',  label:'NIFTY 200',      val:13456.80, chg:+1.05, tags:['n50','nxt50','mid']},
+  {id:'mid',   label:'NIFTY MIDCAP',   val:42567.30, chg:+1.67, tags:['mid']},
+  {id:'sml',   label:'NIFTY SMALLCAP', val:16234.50, chg:+2.34, tags:['sml']},
+  {id:'nit',   label:'NIFTY IT',       val:38456.70, chg:-1.23, tags:['nit']},
+];
+
+const SECTOR_META = {
+  Banking:'🏦', IT:'💻', Energy:'⚡', FMCG:'🛒', Auto:'🚗', Finance:'💰',
+  Pharma:'💊', Infra:'🏗️', Power:'🔌', Defence:'🛡️', Consumer:'🎨',
+  Healthcare:'🏥', Cement:'🏛️', Metals:'⚙️',
+};
+const SECTOR_COLOR = {
+  Banking:'#ffd740', IT:'#4fc3f7', Energy:'#ff9100', FMCG:'#69f0ae', Auto:'#ea80fc',
+  Finance:'#ffe57f', Pharma:'#80d8ff', Infra:'#cfd8dc', Power:'#fff176',
+  Defence:'#90a4ae', Consumer:'#f48fb1', Healthcare:'#80cbc4', Cement:'#d7ccc8', Metals:'#b0bec5',
+};
+
+let watchlist = JSON.parse(localStorage.getItem('stk_wl')||'["RELIANCE","TCS","HDFCBANK","INFY"]');
+let currentUser = JSON.parse(sessionStorage.getItem('stk_user')||'null');
+let popStock = null;
+let activeIdx = 'n50';
+let activeSecStocks = [];
+let viewAllOpen = false;
+
+// ── UTILS ──
+const fp = v => v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fc = v => (v>=0?'+':'')+v.toFixed(2)+'%';
+function heatColor(c) {
+  if(c>=4) return '#00c853'; if(c>=2) return '#2e7d32';
+  if(c>=.5) return '#388e3c'; if(c>=0) return '#1b5e20';
+  if(c>-.5) return '#7f0000'; if(c>-2) return '#b71c1c';
+  if(c>-4) return '#c62828'; return '#d50000';
+}
+
+// ── TREEMAP ──
+function treeLayout(items,x,y,w,h){
+  if(!items.length) return [];
+  if(items.length===1) return [{...items[0],x,y,w:Math.max(w,0),h:Math.max(h,0)}];
+  const total=items.reduce((s,i)=>s+i.mcap,0);
+  let sum=0,split=1;
+  for(let i=0;i<items.length-1;i++){sum+=items[i].mcap;if(sum>=total/2){split=i+1;break;}}
+  const first=items.slice(0,split),second=items.slice(split);
+  if(!second.length) return treeLayout(first,x,y,w,h);
+  const ratio=first.reduce((s,i)=>s+i.mcap,0)/total;
+  return w>=h
+    ?[...treeLayout(first,x,y,w*ratio,h),...treeLayout(second,x+w*ratio,y,w*(1-ratio),h)]
+    :[...treeLayout(first,x,y,w,h*ratio),...treeLayout(second,x,y+h*ratio,w,h*(1-ratio))];
+}
+function buildTreemap(stocks,containerId,height){
+  const el=document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML='';
+  el.style.height=height+'px';
+  const W=el.clientWidth||el.getBoundingClientRect().width||1100;
+  const sorted=[...stocks].sort((a,b)=>b.mcap-a.mcap);
+  const tiles=treeLayout(sorted,0,0,W,height);
+  tiles.forEach(t=>{
+    const d=document.createElement('div');
+    d.className='hm-block';
+    d.style.cssText=`left:${t.x.toFixed(1)}px;top:${t.y.toFixed(1)}px;width:${t.w.toFixed(1)}px;height:${t.h.toFixed(1)}px;background:${heatColor(t.chg)}`;
+    const min=Math.min(t.w,t.h);
+    const ss=min>90?15:min>60?13:min>40?10:8;
+    const cs=min>90?12:min>60?10:min>40?9:7;
+    d.innerHTML=`${t.w>70?`<span class="hm-sec">${t.sector}</span>`:''}
+      <span class="hm-sym" style="font-size:${ss}px">${t.sym}</span>
+      ${min>36?`<span class="hm-chg" style="font-size:${cs}px">${fc(t.chg)}</span>`:''}`;
+    d.title=`${t.sym} — ${t.name}\n₹${fp(t.price)}  ${fc(t.chg)}`;
+    d.addEventListener('click',()=>openPopup(STOCKS.find(x=>x.sym===t.sym)||t));
+    el.appendChild(d);
+  });
+}
+
+// ── INDEX SELECTOR ──
+function buildIndexSelector(){
+  const el=document.getElementById('idxSelector');
+  el.innerHTML=INDICES.map(idx=>`
+    <div class="idx-pill ${idx.id===activeIdx?'on':''}" id="ip-${idx.id}" onclick="selectIdx('${idx.id}')">
+      <span class="idx-pill-name">${idx.label}</span>
+      <span class="idx-pill-val">${idx.val.toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+      <span class="idx-pill-chg ${idx.chg>=0?'pos':'neg'}">${fc(idx.chg)}</span>
+    </div>`).join('');
+}
+function selectIdx(id){
+  activeIdx=id;
+  document.querySelectorAll('.idx-pill').forEach(p=>p.classList.remove('on'));
+  const el=document.getElementById('ip-'+id);
+  if(el) el.classList.add('on');
+  const idx=INDICES.find(x=>x.id===id);
+  document.getElementById('hmTitle').textContent=`${idx.label} — HEAT MAP`;
+  document.getElementById('niftyNum').textContent=idx.val.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('niftyPill').textContent=(idx.chg>=0?'▲ +':'▼ ')+Math.abs(idx.chg).toFixed(2)+'%';
+  document.getElementById('niftyPill').className='nifty-pill '+(idx.chg>=0?'pos':'neg');
+  document.getElementById('niftyPill').style.background=idx.chg>=0?'var(--green-dim)':'var(--red-dim)';
+  const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
+  renderMovers(filtered);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',430)));
+}
+
+// ── MOVERS ──
+function renderMovers(stocks){
+  stocks=stocks||STOCKS.filter(s=>s.idx.includes('n50'));
+  const by=[...stocks].sort((a,b)=>b.chg-a.chg);
+  const gainers=by.slice(0,8), losers=by.slice(-8).reverse();
+  document.getElementById('gainersEl').innerHTML=gainers.map((s,i)=>`
+    <div class="mrow" onclick="openPopup(STOCKS.find(x=>x.sym==='${s.sym}'))">
+      <span class="m-rank">${i+1}</span><span class="m-sym">${s.sym}</span>
+      <span class="m-name">${s.name}</span><span class="m-price">₹${fp(s.price)}</span>
+      <span class="m-chg g">${fc(s.chg)}</span></div>`).join('');
+  document.getElementById('losersEl').innerHTML=losers.map((s,i)=>`
+    <div class="mrow" onclick="openPopup(STOCKS.find(x=>x.sym==='${s.sym}'))">
+      <span class="m-rank">${i+1}</span><span class="m-sym">${s.sym}</span>
+      <span class="m-name">${s.name}</span><span class="m-price">₹${fp(s.price)}</span>
+      <span class="m-chg r">${fc(s.chg)}</span></div>`).join('');
+}
+
+// ── SECTORS ──
+function renderSectors(){
+  const map={};
+  STOCKS.forEach(s=>{(map[s.sector]=map[s.sector]||[]).push(s);});
+  const grid=document.getElementById('sectorGrid');
+  grid.innerHTML='';
+  Object.keys(map).sort((a,b)=>map[b].reduce((s,x)=>s+x.mcap,0)-map[a].reduce((s,x)=>s+x.mcap,0)).forEach(sec=>{
+    const stocks=map[sec];
+    const avg=stocks.reduce((s,x)=>s+x.chg,0)/stocks.length;
+    const card=document.createElement('div');
+    card.className='sec-card'; card.id='sc-'+sec;
+    card.innerHTML=`<div class="sec-icon">${SECTOR_META[sec]||'📈'}</div>
+      <div class="sec-nm" style="color:${SECTOR_COLOR[sec]||'#fff'}">${sec}</div>
+      <div class="sec-chg ${avg>=0?'pos':'neg'}">${fc(avg)}</div>
+      <div class="sec-cnt">${stocks.length} stocks</div>`;
+    card.addEventListener('click',()=>openSecDetail(sec,stocks));
+    grid.appendChild(card);
+  });
+}
+function openSecDetail(sec,stocks){
+  document.querySelectorAll('.sec-card').forEach(c=>c.classList.remove('active'));
+  const c=document.getElementById('sc-'+sec); if(c) c.classList.add('active');
+  activeSecStocks=stocks;
+  viewAllOpen=false;
+  document.getElementById('secAllStocks').classList.remove('open');
+  document.getElementById('viewAllBtn').textContent=`View All ${stocks.length} Stocks ▾`;
+  const avg=stocks.reduce((s,x)=>s+x.chg,0)/stocks.length;
+  const tmcap=stocks.reduce((s,x)=>s+x.mcap,0);
+  document.getElementById('secDetailTitle').textContent=`${SECTOR_META[sec]||''} ${sec.toUpperCase()} SECTOR`;
+  document.getElementById('secDetailSub').textContent=`${stocks.length} stocks  ·  Avg ${fc(avg)}  ·  Total mkt cap ₹${tmcap.toFixed(1)}T`;
+  document.getElementById('saTitle').textContent=`All ${sec} Stocks (${stocks.length})`;
+  const wrap=document.getElementById('secDetailWrap');
+  wrap.style.display='block';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(stocks,'secHeatmap',380)));
+  renderSecAllTable(stocks);
+  const top=wrap.getBoundingClientRect().top+window.scrollY-20;
+  window.scrollTo({top,behavior:'smooth'});
+}
+function renderSecAllTable(stocks){
+  const sorted=[...stocks].sort((a,b)=>b.mcap-a.mcap);
+  document.getElementById('secAllBody').innerHTML=sorted.map((s,i)=>`<tr style="cursor:pointer" onclick="openPopup(STOCKS.find(x=>x.sym==='${s.sym}'))">
+    <td style="color:var(--text3)">${i+1}</td>
+    <td class="wl-sym-cell">${s.sym}</td>
+    <td style="color:var(--text2)">${s.name}</td>
+    <td class="wl-price-cell">₹${fp(s.price)}</td>
+    <td class="wl-chg-cell ${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</td>
+    <td style="font-family:var(--mono);color:var(--text2)">₹${s.mcap}T</td>
+  </tr>`).join('');
+}
+function toggleViewAll(){
+  viewAllOpen=!viewAllOpen;
+  const el=document.getElementById('secAllStocks');
+  el.classList.toggle('open',viewAllOpen);
+  document.getElementById('viewAllBtn').textContent=viewAllOpen
+    ?'Hide Stocks ▴':`View All ${activeSecStocks.length} Stocks ▾`;
+  if(viewAllOpen) el.scrollIntoView=()=>{}; // noop — let natural scroll handle it
+}
+function closeSecDetail(){
+  document.getElementById('secDetailWrap').style.display='none';
+  document.querySelectorAll('.sec-card').forEach(c=>c.classList.remove('active'));
+  viewAllOpen=false;
+}
+
+// ── TICKER ──
+function buildTicker(){
+  const items=[...STOCKS].filter(s=>s.idx.includes('n50')||s.idx.includes('bnk')).sort(()=>0.5-Math.random());
+  const html=items.map(s=>`<span class="ti"><span class="ti-sym">${s.sym}</span><span class="ti-p">₹${fp(s.price)}</span><span class="${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</span></span>`).join('');
+  document.getElementById('tickerTrack').innerHTML=html+html;
+}
+
+// ── WATCHLIST ──
+function renderWatchlist(){
+  document.getElementById('wlBadge').textContent=watchlist.length;
+  const el=document.getElementById('wlContent');
+  if(!watchlist.length){el.innerHTML=`<div class="wl-empty"><div class="wl-empty-icon">⭐</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Your watchlist is empty</div><div style="font-size:13px;color:var(--text2)">Search for stocks and add them here</div></div>`;return;}
+  const items=watchlist.map(sym=>STOCKS.find(s=>s.sym===sym)).filter(Boolean);
+  el.innerHTML=`<div class="wl-table-wrap"><table>
+    <thead><tr><th>#</th><th>Symbol</th><th>Company</th><th>Sector</th><th>Price (₹)</th><th>Change</th><th>Mkt Cap</th><th>Action</th></tr></thead>
+    <tbody>${items.map((s,i)=>`<tr>
+      <td style="color:var(--text3)">${i+1}</td>
+      <td class="wl-sym-cell">${s.sym}</td>
+      <td style="color:var(--text2)">${s.name}</td>
+      <td><span class="tag">${s.sector}</span></td>
+      <td class="wl-price-cell">₹${fp(s.price)}</td>
+      <td class="wl-chg-cell ${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</td>
+      <td style="color:var(--text2);font-family:var(--mono)">₹${s.mcap}T</td>
+      <td><button class="btn-rm" onclick="wlRemove('${s.sym}')">Remove</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+function wlAdd(sym){
+  if(!sym){sym=document.getElementById('wlInput').value.trim().toUpperCase();document.getElementById('wlInput').value='';document.getElementById('wlDrop').classList.remove('open');}
+  if(!sym) return;
+  const s=STOCKS.find(x=>x.sym===sym); if(!s) return;
+  if(!watchlist.includes(sym)){watchlist.push(sym);localStorage.setItem('stk_wl',JSON.stringify(watchlist));}
+  renderWatchlist();
+}
+function wlRemove(sym){
+  watchlist=watchlist.filter(s=>s!==sym);
+  localStorage.setItem('stk_wl',JSON.stringify(watchlist));
+  renderWatchlist();
+}
+
+// ── SEARCH ──
+function setupSearch(inputId,dropId,onSelect){
+  const inp=document.getElementById(inputId);
+  const drop=document.getElementById(dropId);
+  inp.addEventListener('input',function(){
+    const q=this.value.trim().toUpperCase();
+    if(!q){drop.classList.remove('open');return;}
+    const hits=STOCKS.filter(s=>s.sym.includes(q)||s.name.toUpperCase().includes(q)).slice(0,8);
+    if(!hits.length){drop.classList.remove('open');return;}
+    drop.innerHTML=hits.map(s=>`<div class="sdr" onclick="(${onSelect.toString()})('${s.sym}')">
+      <div class="sdr-l"><span class="sdr-sym">${s.sym}</span><span class="sdr-name">${s.name}</span></div>
+      <div class="sdr-r"><div class="sdr-price" style="color:var(--text)">₹${fp(s.price)}</div><div class="sdr-chg ${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</div></div>
+    </div>`).join('');
+    drop.classList.add('open');
+  });
+}
+setupSearch('searchInput','searchDrop',function(sym){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchDrop').classList.remove('open');
+  const s=STOCKS.find(x=>x.sym===sym); if(s) openPopup(s);
+});
+setupSearch('wlInput','wlDrop',function(sym){
+  document.getElementById('wlInput').value=sym;
+  document.getElementById('wlDrop').classList.remove('open');
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.search-zone')) document.getElementById('searchDrop').classList.remove('open');
+  if(!e.target.closest('.wl-add')) document.getElementById('wlDrop').classList.remove('open');
+  if(!e.target.closest('.user-zone')) document.querySelectorAll('.user-menu').forEach(m=>m.classList.remove('open'));
+});
+
+// ── POPUP ──
+function openPopup(s){
+  if(!s) return; popStock=s;
+  const isPos=s.chg>=0;
+  document.getElementById('popSym').textContent=s.sym;
+  document.getElementById('popName').textContent=s.name;
+  document.getElementById('popPrice').textContent='₹'+fp(s.price);
+  document.getElementById('popPrice').style.color=isPos?'var(--green)':'var(--red)';
+  document.getElementById('popChg').textContent=(isPos?'▲ ':'▼ ')+Math.abs(s.chg).toFixed(2)+'%  today';
+  document.getElementById('popChg').style.color=isPos?'var(--green)':'var(--red)';
+  document.getElementById('popSector').textContent=s.sector;
+  document.getElementById('popMcap').textContent='₹'+s.mcap+'T';
+  document.getElementById('popHigh').textContent='₹'+fp(s.price*1.18);
+  document.getElementById('popLow').textContent='₹'+fp(s.price*0.78);
+  document.getElementById('popOverlay').classList.add('open');
+  document.getElementById('stockPopup').classList.add('open');
+}
+function closePopup(){
+  document.getElementById('popOverlay').classList.remove('open');
+  document.getElementById('stockPopup').classList.remove('open');
+  popStock=null;
+}
+function popAddWl(){if(popStock){wlAdd(popStock.sym);closePopup();}}
+
+// ── TABS ──
+function goTab(name){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tnb').forEach(b=>b.classList.remove('on'));
+  document.getElementById('pane-'+name).classList.add('on');
+  document.getElementById('tb-'+name).classList.add('on');
+  if(name==='market'){
+    const idx=INDICES.find(x=>x.id===activeIdx);
+    const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',430)));
+  }
+}
+
+// ── VINTAGE CLOCK ──
+function setupClock(){
+  const svg=document.getElementById('vintClock');
+  const ns='http://www.w3.org/2000/svg';
+  const cx=28,cy=28;
+  // Defs
+  const defs=document.createElementNS(ns,'defs');
+  defs.innerHTML=`
+    <radialGradient id="rimG" cx="50%" cy="35%" r="58%">
+      <stop offset="0%" stop-color="#d4a843"/>
+      <stop offset="45%" stop-color="#9a6e1f"/>
+      <stop offset="100%" stop-color="#5a3e10"/>
+    </radialGradient>
+    <radialGradient id="faceG" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#140d02"/>
+      <stop offset="100%" stop-color="#080400"/>
+    </radialGradient>`;
+  svg.insertBefore(defs,svg.firstChild);
+  const ins=(tag,attrs,before)=>{const el=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));svg.insertBefore(el,before||svg.firstChild);return el;};
+  const hH=document.getElementById('hHand');
+  ins('circle',{cx,cy,r:27,fill:'url(#rimG)'},hH);
+  ins('circle',{cx,cy,r:24,fill:'none',stroke:'#2d1c06','stroke-width':'0.8'},hH);
+  ins('circle',{cx,cy,r:23,fill:'url(#faceG)'},hH);
+  ins('circle',{cx,cy,r:21.5,fill:'none',stroke:'rgba(200,160,40,0.06)','stroke-width':'0.5'},hH);
+  // Tick marks
+  for(let h=0;h<60;h++){
+    const a=(h*6-90)*Math.PI/180;
+    const isMaj=h%5===0;
+    const or=21.5, ir=isMaj?17.5:19.5;
+    ins('line',{x1:cx+or*Math.cos(a),y1:cy+or*Math.sin(a),x2:cx+ir*Math.cos(a),y2:cy+ir*Math.sin(a),stroke:'#c8a84b','stroke-width':isMaj?'1.4':'0.5','stroke-linecap':'round'},hH);
+  }
+  // BSE label
+  const bse=document.createElementNS(ns,'text');
+  bse.setAttribute('x',cx); bse.setAttribute('y',cy-4);
+  bse.setAttribute('text-anchor','middle'); bse.setAttribute('fill','rgba(200,168,75,0.55)');
+  bse.setAttribute('font-family','IM Fell English, Georgia, serif'); bse.setAttribute('font-size','4.5');
+  bse.setAttribute('letter-spacing','2'); bse.textContent='BSE';
+  svg.insertBefore(bse,hH);
+  // IST label
+  const ist=document.createElementNS(ns,'text');
+  ist.setAttribute('x',cx); ist.setAttribute('y',cy+9);
+  ist.setAttribute('text-anchor','middle'); ist.setAttribute('fill','rgba(200,168,75,0.4)');
+  ist.setAttribute('font-family','IM Fell English, Georgia, serif'); ist.setAttribute('font-size','3.8');
+  ist.textContent='I · S · T';
+  svg.insertBefore(ist,hH);
+  // Shine
+  ins('ellipse',{cx:cx-3,cy:cy-10,rx:4.5,ry:2.5,fill:'rgba(255,255,240,0.03)',transform:`rotate(-35,${cx-3},${cy-10})`},hH);
+  // Re-order cap to be above hands
+  const cap=document.getElementById('clockCap');
+  svg.appendChild(cap);
+  const cenDot=document.createElementNS(ns,'circle');
+  cenDot.setAttribute('cx',cx); cenDot.setAttribute('cy',cy);
+  cenDot.setAttribute('r','1.1'); cenDot.setAttribute('fill','#3d2800');
+  svg.appendChild(cenDot);
+  // Outer glow
+  ins('circle',{cx,cy,r:27,fill:'none',stroke:'rgba(200,160,40,0.12)','stroke-width':'1.5'});
+}
+
+function updateClock(){
+  const now=new Date();
+  const ist=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  const h=ist.getHours()%12, m=ist.getMinutes(), s=ist.getSeconds();
+  const cx=28,cy=28;
+  const hA=((h*60+m)/720*360-90)*Math.PI/180;
+  const mA=((m*60+s)/3600*360-90)*Math.PI/180;
+  const sA=(s/60*360-90)*Math.PI/180;
+  const sh=(id,a,len,back)=>{
+    const el=document.getElementById(id);
+    el.setAttribute('x1',cx+back*Math.cos(a+Math.PI));
+    el.setAttribute('y1',cy+back*Math.sin(a+Math.PI));
+    el.setAttribute('x2',cx+len*Math.cos(a));
+    el.setAttribute('y2',cy+len*Math.sin(a));
+  };
+  sh('hHand',hA,11,3);
+  sh('mHand',mA,14.5,4);
+  sh('sHand',sA,17,5);
+}
+
+// ── GOOGLE LOGIN ──
+function renderAuth(){
+  const zone=document.getElementById('authZone');
+  if(currentUser){
+    const initial=currentUser.name.charAt(0).toUpperCase();
+    const hue=(currentUser.name.charCodeAt(0)*37)%360;
+    zone.innerHTML=`<div class="user-zone" onclick="toggleUserMenu()">
+      <div class="user-ava" style="background:hsl(${hue},60%,55%)">${initial}</div>
+      <span class="user-name">${currentUser.name}</span>
+      <span style="color:var(--text3);font-size:10px">▾</span>
+      <div class="user-menu" id="userMenu">
+        <div class="user-menu-item">👤 ${currentUser.email}</div>
+        <div class="user-menu-item">⭐ My Watchlist (${watchlist.length})</div>
+        <div class="user-menu-item" onclick="doLogout()">🚪 Sign Out</div>
+      </div>
+    </div>`;
+  } else {
+    zone.innerHTML=`<button class="g-login-btn" id="loginBtn" onclick="openGoogleModal()">
+      <svg width="15" height="15" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908C16.658 14.215 17.64 11.907 17.64 9.2z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      Sign in
+    </button>`;
+  }
+}
+function toggleUserMenu(){
+  const m=document.getElementById('userMenu'); if(m) m.classList.toggle('open');
+}
+function openGoogleModal(){
+  document.getElementById('gOverlay').classList.add('open');
+  document.getElementById('gModal').classList.add('open');
+}
+function closeGoogleModal(){
+  document.getElementById('gOverlay').classList.remove('open');
+  document.getElementById('gModal').classList.remove('open');
+}
+function doGoogleLogin(){
+  const email=document.getElementById('gEmailInput').value.trim()||'trader@gmail.com';
+  const name=email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g,l=>l.toUpperCase());
+  currentUser={name,email};
+  sessionStorage.setItem('stk_user',JSON.stringify(currentUser));
+  closeGoogleModal();
+  renderAuth();
+}
+function doLogout(){
+  currentUser=null; sessionStorage.removeItem('stk_user'); renderAuth();
+}
+
+// ── LIVE SIMULATION ──
+function simulatePrices(){
+  STOCKS.forEach(s=>{
+    const d=(Math.random()-.5)*0.07;
+    s.chg=parseFloat(Math.max(-9.9,Math.min(9.9,s.chg+d)).toFixed(2));
+    s.price=parseFloat((s.price*(1+d*0.01)).toFixed(2));
+  });
+  INDICES.forEach(idx=>{
+    const d=(Math.random()-.5)*0.04;
+    idx.chg=parseFloat(Math.max(-9.9,Math.min(9.9,idx.chg+d)).toFixed(2));
+    idx.val=parseFloat((idx.val*(1+d*0.005)).toFixed(2));
+  });
+  buildTicker();
+  const idx=INDICES.find(x=>x.id===activeIdx);
+  const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
+  renderMovers(filtered);
+  buildIndexSelector();
+  if(document.getElementById('pane-market').classList.contains('on'))
+    buildTreemap(filtered,'mainHeatmap',430);
+}
+setInterval(simulatePrices,6000);
+
+// ── PARTICLE BG ──
+(function(){
+  const canvas=document.getElementById('bgCanvas');
+  const ctx=canvas.getContext('2d');
+  let W,H;
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+  const N=50;
+  const pts=Array.from({length:N},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,r:Math.random()*1.8+.4,o:Math.random()*.4+.1}));
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<140){ctx.beginPath();ctx.strokeStyle=`rgba(0,229,255,${0.07*(1-d/140)})`;ctx.lineWidth=.5;ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();}
+      }
+      const p=pts[i];
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(79,195,247,${p.o})`;ctx.fill();
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0||p.x>W) p.vx*=-1;
+      if(p.y<0||p.y>H) p.vy*=-1;
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// ── INIT ──
+window.addEventListener('load',()=>{
+  setupClock();
+  updateClock();
+  setInterval(updateClock,1000);
+  buildTicker();
+  buildIndexSelector();
+  renderMovers();
+  renderSectors();
+  renderWatchlist();
+  renderAuth();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const idx=INDICES.find(x=>x.id==='n50');
+    buildTreemap(STOCKS.filter(s=>s.idx.includes('n50')),'mainHeatmap',430);
+  }));
+});
+window.addEventListener('resize',()=>{
+  clearTimeout(window._rt);
+  window._rt=setTimeout(()=>{
+    const idx=INDICES.find(x=>x.id===activeIdx);
+    const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
+    if(document.getElementById('pane-market').classList.contains('on'))
+      buildTreemap(filtered,'mainHeatmap',430);
+    if(document.getElementById('secDetailWrap').style.display!=='none' && activeSecStocks.length)
+      buildTreemap(activeSecStocks,'secHeatmap',380);
+  },250);
+});
+</script>
+</body>
+</html>

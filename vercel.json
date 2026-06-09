@@ -1,13 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/stocks.py",  "use": "@vercel/python" },
-    { "src": "api/indices.py", "use": "@vercel/python" },
-    { "src": "index.html",     "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/stocks",  "dest": "api/stocks.py"  },
-    { "src": "/api/indices", "dest": "api/indices.py" },
-    { "src": "/(.*)",        "dest": "index.html"     }
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

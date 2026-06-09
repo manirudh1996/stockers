@@ -1,41 +1,71 @@
 from http.server import BaseHTTPRequestHandler
 import json
-import yfinance as yf
+
+try:
+    import requests as _req
+    HAS_REQ = True
+except ImportError:
+    HAS_REQ = False
+
+NSE_HDR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.nseindia.com/",
+    "X-Requested-With": "XMLHttpRequest",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+}
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        results = {}
+        results = {"has_requests": HAS_REQ}
 
-        # Test 1: NSE stock with 5d period
-        try:
-            h = yf.Ticker("RELIANCE.NS").history(period="5d")
-            results["RELIANCE_5d"] = {"rows": len(h), "ok": len(h) >= 2}
-            if len(h) >= 2:
-                results["RELIANCE_5d"]["price"] = round(float(h["Close"].iloc[-1]), 2)
-                results["RELIANCE_5d"]["chg"] = round(
-                    (float(h["Close"].iloc[-1]) - float(h["Close"].iloc[-2]))
-                    / float(h["Close"].iloc[-2]) * 100, 2)
-        except Exception as e:
-            results["RELIANCE_5d"] = {"error": str(e)}
+        if HAS_REQ:
+            try:
+                s = _req.Session()
+                s.headers.update(NSE_HDR)
 
-        # Test 2: US stock to verify yfinance works at all
-        try:
-            h2 = yf.Ticker("AAPL").history(period="5d")
-            results["AAPL_5d"] = {"rows": len(h2), "ok": len(h2) >= 2}
-            if len(h2) >= 2:
-                results["AAPL_5d"]["price"] = round(float(h2["Close"].iloc[-1]), 2)
-        except Exception as e:
-            results["AAPL_5d"] = {"error": str(e)}
+                # Step 1: Hit homepage to get session cookies
+                r0 = s.get("https://www.nseindia.com/", timeout=8)
+                results["nse_home"] = {"status": r0.status_code, "ok": r0.status_code == 200}
 
-        # Test 3: NSE with 1mo period
-        try:
-            h3 = yf.Ticker("TCS.NS").history(period="1mo")
-            results["TCS_1mo"] = {"rows": len(h3), "ok": len(h3) >= 2}
-            if len(h3) >= 2:
-                results["TCS_1mo"]["price"] = round(float(h3["Close"].iloc[-1]), 2)
-        except Exception as e:
-            results["TCS_1mo"] = {"error": str(e)}
+                # Step 2: Fetch NIFTY 50 constituents
+                r1 = s.get(
+                    "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050",
+                    timeout=10,
+                )
+                results["nifty50"] = {"status": r1.status_code}
+                if r1.status_code == 200:
+                    items = r1.json().get("data", [])
+                    results["nifty50"]["count"] = len(items)
+                    results["nifty50"]["ok"] = len(items) > 0
+                    reliance = next((x for x in items if x.get("symbol") == "RELIANCE"), None)
+                    if reliance:
+                        results["RELIANCE"] = {
+                            "price": reliance.get("lastPrice"),
+                            "chg_pct": reliance.get("pChange"),
+                            "year_high": reliance.get("yearHigh"),
+                            "year_low": reliance.get("yearLow"),
+                        }
+
+                # Step 3: All indices
+                r2 = s.get("https://www.nseindia.com/api/allIndices", timeout=10)
+                results["all_indices"] = {"status": r2.status_code}
+                if r2.status_code == 200:
+                    idx_items = r2.json().get("data", [])
+                    results["all_indices"]["count"] = len(idx_items)
+                    results["all_indices"]["ok"] = len(idx_items) > 0
+                    nifty = next((x for x in idx_items if x.get("index") == "NIFTY 50"), None)
+                    if nifty:
+                        results["NIFTY_50"] = {
+                            "val": nifty.get("last"),
+                            "chg_pct": nifty.get("percentChange"),
+                        }
+            except Exception as e:
+                results["error"] = str(e)
 
         body = json.dumps(results, indent=2).encode()
         self.send_response(200)

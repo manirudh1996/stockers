@@ -1,6 +1,12 @@
 from http.server import BaseHTTPRequestHandler
-import json, time
-import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import json, time, urllib.parse, threading
+
+try:
+    import requests as _req
+    HAS_REQ = True
+except ImportError:
+    HAS_REQ = False
 
 STOCKS = [
     ("HDFCBANK","HDFCBANK.NS","HDFC Bank",12.4,"Banking",["n50","bnk","n100","n200"]),
@@ -138,33 +144,124 @@ STOCKS = [
     ("APLAPOLLO","APLAPOLLO.NS","APL Apollo Tubes",0.22,"Metals",["mid","n200"]),
 ]
 
+# NSE indices to fetch — covers all 139 stocks via parallel calls
+NSE_IDX_LIST = [
+    "NIFTY 50",
+    "NIFTY NEXT 50",
+    "NIFTY BANK",
+    "NIFTY IT",
+    "NIFTY PHARMA",
+    "NIFTY AUTO",
+    "NIFTY FMCG",
+    "NIFTY METAL",
+    "NIFTY MIDCAP 50",
+    "NIFTY FINANCIAL SERVICES",
+    "NIFTY REALTY",
+    "NIFTY INFRASTRUCTURE",
+    "NIFTY PSE",
+    "NIFTY ENERGY",
+    "NIFTY INDIA DEFENCE",
+    "NIFTY HEALTHCARE INDEX",
+    "NIFTY CONSUMER DURABLES",
+]
+
+NSE_HDR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.nseindia.com/",
+    "X-Requested-With": "XMLHttpRequest",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+}
+
 _cache = {"stocks": [], "ts": 0}
+_sess = {"s": None, "ts": 0}
 CACHE_TTL = 120
+SESSION_TTL = 270
+
+
+def _get_sess():
+    if not HAS_REQ:
+        return None
+    now = time.time()
+    if _sess["s"] is None or now - _sess["ts"] > SESSION_TTL:
+        s = _req.Session()
+        s.headers.update(NSE_HDR)
+        try:
+            s.get("https://www.nseindia.com/", timeout=8)
+        except Exception:
+            pass
+        _sess["s"] = s
+        _sess["ts"] = now
+    return _sess["s"]
+
+
+def _fetch_one(session, idx_name):
+    try:
+        enc = urllib.parse.quote(idx_name)
+        r = session.get(
+            f"https://www.nseindia.com/api/equity-stockIndices?index={enc}",
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return {}
+        result = {}
+        for item in r.json().get("data", []):
+            sym = item.get("symbol", "")
+            price = item.get("lastPrice") or 0
+            pchg = item.get("pChange") or 0
+            high52 = item.get("yearHigh") or 0
+            low52 = item.get("yearLow") or 0
+            if sym and float(price) > 0:
+                result[sym] = {
+                    "price": round(float(price), 2),
+                    "chg": round(float(pchg), 2),
+                    "high52": round(float(high52), 2),
+                    "low52": round(float(low52), 2),
+                }
+        return result
+    except Exception:
+        return {}
+
+
+def _fetch_prices():
+    session = _get_sess()
+    if not session:
+        return {}
+    price_map = {}
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {ex.submit(_fetch_one, session, idx): idx for idx in NSE_IDX_LIST}
+        for future in as_completed(futures, timeout=12):
+            try:
+                for sym, data in future.result().items():
+                    if sym not in price_map:
+                        price_map[sym] = data
+            except Exception:
+                pass
+    return price_map
 
 
 def _build():
-    yf_syms = [s[1] for s in STOCKS]
-    data = yf.download(
-        tickers=yf_syms, period="2d", interval="1d",
-        group_by="ticker", auto_adjust=True, progress=False, threads=True,
-    )
+    price_map = _fetch_prices()
     result = []
     for sym, yfsym, name, mcap, sector, idx in STOCKS:
-        entry = {"sym": sym, "name": name, "sector": sector, "mcap": mcap,
-                 "idx": idx, "price": 0, "chg": 0, "high52": 0, "low52": 0, "live": False}
-        try:
-            df = data[yfsym] if len(yf_syms) > 1 else data
-            close = df["Close"].dropna()
-            if len(close) >= 2:
-                cur, prev = float(close.iloc[-1]), float(close.iloc[-2])
-                entry.update({"price": round(cur, 2),
-                               "chg": round((cur - prev) / prev * 100, 2),
-                               "high52": round(float(df["High"].dropna().max()), 2),
-                               "low52": round(float(df["Low"].dropna().min()), 2),
-                               "live": True})
-        except Exception:
-            pass
-        result.append(entry)
+        nse_sym = yfsym.replace(".NS", "")
+        p = price_map.get(nse_sym, {})
+        result.append({
+            "sym": sym,
+            "name": name,
+            "sector": sector,
+            "mcap": mcap,
+            "idx": idx,
+            "price": p.get("price", 0),
+            "chg": p.get("chg", 0),
+            "high52": p.get("high52", 0),
+            "low52": p.get("low52", 0),
+            "live": bool(p),
+        })
     return result
 
 

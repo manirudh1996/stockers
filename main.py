@@ -248,7 +248,7 @@ _last_refresh: float = 0
 _fetch_count: int = 0
 _cache_lock = threading.Lock()
 _is_fetching = False
-FETCH_INTERVAL = 15  # seconds between refreshes
+FETCH_INTERVAL = 75  # seconds between refreshes
 
 # ── YFINANCE FETCH ────────────────────────────────────────────────────────────
 

@@ -11,6 +11,8 @@ import requests
 import traceback
 import io
 import sys
+import contextlib
+import importlib.metadata
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -499,7 +501,16 @@ def status():
 def diagnose():
     results = {}
 
-    # Test 1 & 2: raw HTTP to Yahoo Finance
+    # ── Installed versions ────────────────────────────────────────────────────
+    versions = {}
+    for pkg in ["yfinance", "curl_cffi", "requests", "pandas"]:
+        try:
+            versions[pkg] = importlib.metadata.version(pkg)
+        except Exception:
+            versions[pkg] = "NOT INSTALLED"
+    results["0_versions"] = versions
+
+    # ── Test 1 & 2: raw HTTP ──────────────────────────────────────────────────
     for label, url in [
         ("1_yahoo_finance_homepage", "https://finance.yahoo.com"),
         ("2_yahoo_query1",           "https://query1.finance.yahoo.com"),
@@ -507,52 +518,40 @@ def diagnose():
         try:
             r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
             results[label] = {
-                "status_code": r.status_code,
-                "headers":     dict(r.headers),
-                "body_snippet": r.text[:500],
+                "status_code":  r.status_code,
+                "body_snippet": r.text[:300],
             }
         except Exception as e:
             results[label] = {"error": str(e), "traceback": traceback.format_exc()}
 
-    # Test 3 & 4: yf.Ticker.history
-    for label, sym in [
-        ("3_yf_ticker_AAPL",        "AAPL"),
-        ("4_yf_ticker_RELIANCE_NS", "RELIANCE.NS"),
-    ]:
+    # ── Tests 3-6: yfinance calls with stdout+stderr captured ─────────────────
+    def run_yf(label, code_str, fn):
+        stdout_buf = io.StringIO()
+        stderr_buf = io.StringIO()
+        result = {}
         try:
-            old_stderr = sys.stderr
-            sys.stderr = buf = io.StringIO()
-            df = yf.Ticker(sym).history(period="1d")
-            sys.stderr = old_stderr
-            results[label] = {
-                "rows":    len(df),
-                "columns": list(df.columns),
-                "sample":  df.tail(2).to_dict() if not df.empty else {},
-                "stderr":  buf.getvalue()[:500],
-            }
+            with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+                df = fn()
+            result["stdout"]  = stdout_buf.getvalue()
+            result["stderr"]  = stderr_buf.getvalue()
+            result["rows"]    = len(df)
+            result["columns"] = list(df.columns) if hasattr(df, "columns") else []
+            result["output"]  = df.to_string() if not df.empty else "(empty dataframe)"
         except Exception as e:
-            sys.stderr = old_stderr if 'old_stderr' in dir() else sys.stderr
-            results[label] = {"error": str(e), "traceback": traceback.format_exc()}
+            result["stdout"]    = stdout_buf.getvalue()
+            result["stderr"]    = stderr_buf.getvalue()
+            result["error"]     = str(e)
+            result["traceback"] = traceback.format_exc()
+        results[label] = result
 
-    # Test 5 & 6: yf.download
-    for label, sym in [
-        ("5_yf_download_AAPL",        "AAPL"),
-        ("6_yf_download_RELIANCE_NS", "RELIANCE.NS"),
-    ]:
-        try:
-            old_stderr = sys.stderr
-            sys.stderr = buf = io.StringIO()
-            df = yf.download(sym, period="1d", progress=False)
-            sys.stderr = old_stderr
-            results[label] = {
-                "rows":    len(df),
-                "columns": list(df.columns),
-                "sample":  df.tail(2).to_dict() if not df.empty else {},
-                "stderr":  buf.getvalue()[:500],
-            }
-        except Exception as e:
-            sys.stderr = old_stderr if 'old_stderr' in dir() else sys.stderr
-            results[label] = {"error": str(e), "traceback": traceback.format_exc()}
+    run_yf("3_Ticker_AAPL",        "yf.Ticker('AAPL').history(period='1d')",
+           lambda: yf.Ticker("AAPL").history(period="1d"))
+    run_yf("4_Ticker_RELIANCE_NS", "yf.Ticker('RELIANCE.NS').history(period='1d')",
+           lambda: yf.Ticker("RELIANCE.NS").history(period="1d"))
+    run_yf("5_download_AAPL",      "yf.download('AAPL', period='1d')",
+           lambda: yf.download("AAPL", period="1d", progress=False))
+    run_yf("6_download_RELIANCE",  "yf.download('RELIANCE.NS', period='1d')",
+           lambda: yf.download("RELIANCE.NS", period="1d", progress=False))
 
     return results
 

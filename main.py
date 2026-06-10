@@ -395,6 +395,43 @@ def _refresh_batch(batch_idx: int) -> int:
     return len(stocks)
 
 
+def _retry_zero_stocks():
+    """After each full cycle, retry any stock still at price=0 individually."""
+    with _cache_lock:
+        zero_stocks = [s for s in STOCK_META if _stock_cache.get(s["sym"], {}).get("price", 0) == 0]
+
+    if not zero_stocks:
+        return
+
+    logger.info(f"Singleton retry: {len(zero_stocks)} stocks still at price=0")
+    for stock in zero_stocks:
+        try:
+            df = yf.Ticker(stock["yf"]).history(period="5d", interval="1d")
+            if df.empty:
+                continue
+            close = df["Close"].dropna()
+            if len(close) < 1:
+                continue
+            cur = float(close.iloc[-1])
+            if cur <= 0:
+                continue
+            prev = float(close.iloc[-2]) if len(close) >= 2 else cur
+            data = {
+                "price":      round(cur, 2),
+                "chg":        round((cur - prev) / prev * 100, 2) if prev > 0 else 0.0,
+                "prev_close": round(prev, 2),
+                "high52":     round(float(df["High"].max()), 2),
+                "low52":      round(float(df["Low"].min()), 2),
+            }
+            with _cache_lock:
+                _stock_cache[stock["sym"]] = data
+            db_save_stocks({stock["sym"]: data}, time.time())
+            logger.info(f"Singleton OK {stock['sym']}: ₹{cur}")
+        except Exception as e:
+            logger.debug(f"Singleton retry {stock['sym']}: {e}")
+        time.sleep(2)  # gentle pacing between singleton requests
+
+
 def _background_loop():
     global _is_fetching
     batch_cursor  = 0
@@ -429,6 +466,7 @@ def _background_loop():
 
         if batch_cursor % n_batches == 0 and batch_cursor > 0:
             _refresh_indices()
+            _retry_zero_stocks()
 
         time.sleep(FETCH_INTERVAL)
 

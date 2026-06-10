@@ -595,7 +595,7 @@ function heatColor(c){
 
 // ── LIVE API ──
 async function fetchLiveData(){
-  if(!API_BASE) return false;
+  // API_BASE is '' for same-origin (Render) — empty string is valid, don't skip it
   try{
     const [sRes,iRes]=await Promise.all([
       fetch(API_BASE+'/api/stocks',{signal:AbortSignal.timeout(10000)}),
@@ -1039,7 +1039,7 @@ function simulatePrices(){
     buildTreemap(filtered,'mainHeatmap',430);
 }
 setInterval(simulatePrices,6000);
-setInterval(pollLive,90000); // re-poll every 90s
+setInterval(pollLive,30000); // re-poll every 30s (matches server cache TTL)
 
 // ── PARTICLE BG ──
 (function(){

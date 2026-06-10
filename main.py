@@ -47,8 +47,8 @@ STOCK_META = [
     {"sym":"INFY",        "yf":"INFY.NS",          "name":"Infosys",                   "mcap":6.6,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"HCLTECH",     "yf":"HCLTECH.NS",       "name":"HCL Technologies",          "mcap":3.9,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"WIPRO",       "yf":"WIPRO.NS",         "name":"Wipro",                     "mcap":2.4,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
-    {"sym":"LTIM",        "yf":"LTIM.BO",          "name":"LTIMindtree",               "mcap":1.7,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
-    {"sym":"TECHM",       "yf":"TECHM.NS",         "name":"Tech Mahindra",             "mcap":1.2,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
+    {"sym":"LTIM",        "yf":"LTM.NS",           "name":"LTIMindtree",               "mcap":1.7,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
+    {"sym":"TECHM",       "yf":"TECHM.BO",         "name":"Tech Mahindra",             "mcap":1.2,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"MPHASIS",     "yf":"MPHASIS.NS",       "name":"Mphasis",                   "mcap":0.46, "sector":"IT",         "idx":["nxt50","nit","n100","n200"]},
     {"sym":"PERSISTENT",  "yf":"PERSISTENT.NS",    "name":"Persistent Systems",        "mcap":0.70, "sector":"IT",         "idx":["nxt50","nit","n100","n200"]},
     {"sym":"COFORGE",     "yf":"COFORGE.NS",       "name":"Coforge",                   "mcap":0.35, "sector":"IT",         "idx":["mid","nit","n200"]},
@@ -82,7 +82,7 @@ STOCK_META = [
     # Auto
     {"sym":"MARUTI",      "yf":"MARUTI.NS",        "name":"Maruti Suzuki",             "mcap":3.8,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"TATAMOTORS",  "yf":"TATAMOTORS.NS",    "name":"Tata Motors",               "mcap":3.6,  "sector":"Auto",       "idx":["n50","n100","n200"]},
-    {"sym":"M&M",         "yf":"M&M.NS",           "name":"Mahindra & Mahindra",       "mcap":2.9,  "sector":"Auto",       "idx":["n50","n100","n200"]},
+    {"sym":"M&M",         "yf":"M%26M.NS",         "name":"Mahindra & Mahindra",       "mcap":2.9,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"BAJAJ-AUTO",  "yf":"BAJAJ-AUTO.NS",    "name":"Bajaj Auto",                "mcap":2.6,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"EICHERMOT",   "yf":"EICHERMOT.NS",     "name":"Eicher Motors",             "mcap":1.2,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"HEROMOTOCO",  "yf":"HEROMOTOCO.NS",    "name":"Hero MotoCorp",             "mcap":0.9,  "sector":"Auto",       "idx":["n50","n100","n200"]},
@@ -144,7 +144,7 @@ STOCK_META = [
     # Consumer
     {"sym":"TITAN",       "yf":"TITAN.NS",         "name":"Titan Company",             "mcap":3.1,  "sector":"Consumer",   "idx":["n50","n100","n200"]},
     {"sym":"ASIANPAINT",  "yf":"ASIANPAINT.NS",    "name":"Asian Paints",              "mcap":2.6,  "sector":"Consumer",   "idx":["n50","n100","n200"]},
-    {"sym":"ZOMATO",      "yf":"ZOMATO.NS",        "name":"Zomato",                    "mcap":2.1,  "sector":"Consumer",   "idx":["n50","n100","n200"]},
+    {"sym":"ZOMATO",      "yf":"ZOMATO.BO",        "name":"Zomato",                    "mcap":2.1,  "sector":"Consumer",   "idx":["n50","n100","n200"]},
     {"sym":"NYKAA",       "yf":"NYKAA.NS",         "name":"Nykaa (FSN E-Comm)",        "mcap":0.51, "sector":"Consumer",   "idx":["mid","n200"]},
     {"sym":"HAVELLS",     "yf":"HAVELLS.NS",        "name":"Havells India",             "mcap":1.1,  "sector":"Consumer",   "idx":["nxt50","n100","n200"]},
     {"sym":"VOLTAS",      "yf":"VOLTAS.NS",        "name":"Voltas",                    "mcap":0.48, "sector":"Consumer",   "idx":["nxt50","n100","n200"]},

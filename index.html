@@ -44,6 +44,9 @@ header{display:flex;align-items:center;gap:14px;padding:8px 20px;background:rgba
 .s-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
 #searchDrop{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#0a1525;border:1px solid var(--border2);border-radius:10px;max-height:300px;overflow-y:auto;z-index:600;box-shadow:0 12px 40px rgba(0,0,0,0.6);display:none}
 #searchDrop.open{display:block}
+.sdr-divider{padding:5px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06)}
+.sdr-fetch-badge{font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(0,229,255,0.12);color:var(--cyan);font-weight:600;white-space:nowrap}
+.sdr-loading{padding:12px 14px;color:var(--text3);font-size:12px;text-align:center}
 .sdr{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.04);transition:background .15s}
 .sdr:last-child{border-bottom:none}
 .sdr:hover{background:var(--surface2)}
@@ -861,6 +864,7 @@ function wlRemove(sym){
 }
 
 // ── SEARCH ──
+// ── WATCHLIST SEARCH (local 140 only) ──
 function setupSearch(inputId,dropId,onSelect){
   const inp=document.getElementById(inputId);
   const drop=document.getElementById(dropId);
@@ -876,15 +880,66 @@ function setupSearch(inputId,dropId,onSelect){
     drop.classList.add('open');
   });
 }
-setupSearch('searchInput','searchDrop',function(sym){
-  document.getElementById('searchInput').value='';
-  document.getElementById('searchDrop').classList.remove('open');
-  const s=STOCKS.find(x=>x.sym===sym);if(s)openPopup(s);
-});
 setupSearch('wlInput','wlDrop',function(sym){
   document.getElementById('wlInput').value=sym;
   document.getElementById('wlDrop').classList.remove('open');
 });
+
+// ── MAIN SEARCH (140 live + 2119 NSE on-demand) ──
+(function(){
+  const inp=document.getElementById('searchInput');
+  const drop=document.getElementById('searchDrop');
+  let timer=null;
+
+  function renderDrop(local,remote){
+    const lHtml=local.slice(0,6).map(s=>`<div class="sdr" onclick="selectLocalStock('${s.sym}')">
+      <div class="sdr-l"><span class="sdr-sym">${s.sym}</span><span class="sdr-name">${s.name}</span></div>
+      <div class="sdr-r"><div class="sdr-price" style="color:var(--text)">₹${fp(s.price)}</div><div class="sdr-chg ${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</div></div>
+    </div>`).join('');
+    const rHtml=remote.slice(0,6).map(r=>`<div class="sdr" onclick="selectRemoteStock('${r.sym}','${r.name.replace(/'/g,"\\'").replace(/"/g,'\\"')}')">
+      <div class="sdr-l"><span class="sdr-sym">${r.sym}</span><span class="sdr-name">${r.name}</span></div>
+      <div class="sdr-r"><span class="sdr-fetch-badge">NSE Live</span></div>
+    </div>`).join('');
+    const divider=lHtml&&rHtml?'<div class="sdr-divider">More on NSE</div>':'';
+    if(!lHtml&&!rHtml){drop.classList.remove('open');return;}
+    drop.innerHTML=lHtml+divider+rHtml;
+    drop.classList.add('open');
+  }
+
+  inp.addEventListener('input',async function(){
+    const q=this.value.trim();
+    if(!q){drop.classList.remove('open');return;}
+    const qUp=q.toUpperCase();
+    const local=STOCKS.filter(s=>s.sym.includes(qUp)||s.name.toUpperCase().includes(qUp));
+    const localSyms=new Set(local.map(s=>s.sym));
+    renderDrop(local,[]);
+    clearTimeout(timer);
+    timer=setTimeout(async()=>{
+      try{
+        const res=await fetch(API_BASE+'/api/search?q='+encodeURIComponent(q));
+        const data=await res.json();
+        const remote=data.results.filter(r=>!localSyms.has(r.sym));
+        renderDrop(local,remote);
+      }catch(e){}
+    },300);
+  });
+})();
+
+window.selectLocalStock=function(sym){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchDrop').classList.remove('open');
+  const s=STOCKS.find(x=>x.sym===sym);if(s)openPopup(s);
+};
+window.selectRemoteStock=async function(sym,name){
+  document.getElementById('searchInput').value='';
+  document.getElementById('searchDrop').classList.remove('open');
+  openPopup({sym,name,price:0,chg:0,high52:0,low52:0,sector:'NSE',mcap:0});
+  try{
+    const res=await fetch(API_BASE+'/api/quote?sym='+encodeURIComponent(sym));
+    const d=await res.json();
+    if(d.price>0) openPopup({sym,name,price:d.price,chg:d.chg,high52:d.high52,low52:d.low52,sector:'NSE',mcap:0});
+  }catch(e){}
+};
 document.addEventListener('click',e=>{
   if(!e.target.closest('.search-zone'))document.getElementById('searchDrop').classList.remove('open');
   if(!e.target.closest('.wl-add'))document.getElementById('wlDrop').classList.remove('open');

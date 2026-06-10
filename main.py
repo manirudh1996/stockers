@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import yfinance as yf
@@ -6,6 +6,7 @@ import threading
 import sqlite3
 import time
 import logging
+import json
 import os
 import requests
 import traceback
@@ -258,6 +259,8 @@ _index_cache: list = []
 _last_refresh: float = 0
 _fetch_count: int = 0
 _cache_lock = threading.Lock()
+_nse_stocks: list = []        # full 2119-stock NSE list for search
+_quote_cache: dict = {}       # on-demand quote cache {sym: {price,chg,...,ts}}
 _is_fetching = False
 
 FETCH_INTERVAL     = 15   # seconds between batch fetches
@@ -561,6 +564,16 @@ def startup():
         _retry_zero_stocks()
     threading.Thread(target=_delayed_retry, daemon=True).start()
 
+    # Load full NSE stock list for search
+    global _nse_stocks
+    try:
+        with open(os.path.join(BASE_DIR, "nse_stocks.json")) as f:
+            _nse_stocks = json.load(f)
+        logger.info(f"Loaded {len(_nse_stocks)} NSE stocks for search")
+    except Exception as e:
+        logger.warning(f"nse_stocks.json not found: {e}")
+
+
 
 # ── API ENDPOINTS ─────────────────────────────────────────────────────────────
 
@@ -613,6 +626,56 @@ def get_indices():
         if _index_cache:
             return {"indices": _index_cache, "last_refresh": ts}
         return {"indices": [{**i, "val": 0, "chg": 0} for i in INDEX_META], "last_refresh": ts}
+
+
+@app.get("/api/search")
+def search_nse(q: str = Query(default="")):
+    if not q or len(q) < 1:
+        return {"results": []}
+    q_up = q.upper()
+    live_syms = {s["sym"] for s in STOCK_META}
+    hits = [s for s in _nse_stocks
+            if q_up in s["sym"] or q_up in s["name"].upper()][:15]
+    for h in hits:
+        h["in_cache"] = h["sym"] in live_syms
+    return {"results": hits}
+
+
+@app.get("/api/quote")
+def get_quote(sym: str = Query(default="")):
+    sym = sym.upper().strip()
+    if not sym:
+        return {"error": "sym required"}
+
+    # Serve from live stock cache if available
+    with _cache_lock:
+        if sym in _stock_cache and _stock_cache[sym].get("price", 0) > 0:
+            d = _stock_cache[sym]
+            return {"sym": sym, "price": d["price"], "chg": d["chg"],
+                    "high52": d["high52"], "low52": d["low52"], "live": True, "cached": True}
+
+    # Serve from quote cache (5-min TTL)
+    now = time.time()
+    if sym in _quote_cache and now - _quote_cache[sym].get("ts", 0) < 300:
+        return _quote_cache[sym]
+
+    # Fetch live from Yahoo Finance
+    yf_sym = sym + ".NS"
+    try:
+        hist = yf.Ticker(yf_sym).history(period="5d", interval="1d")
+        if hist.empty:
+            return {"sym": sym, "price": 0, "chg": 0, "high52": 0, "low52": 0, "live": False}
+        price    = round(float(hist["Close"].iloc[-1]), 2)
+        prev     = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+        chg      = round((price - prev) / prev * 100, 2) if prev > 0 else 0.0
+        high52   = round(float(hist["High"].max()), 2)
+        low52    = round(float(hist["Low"].min()), 2)
+        result   = {"sym": sym, "price": price, "chg": chg,
+                    "high52": high52, "low52": low52, "live": True, "ts": now}
+        _quote_cache[sym] = result
+        return result
+    except Exception as e:
+        return {"sym": sym, "price": 0, "chg": 0, "live": False, "error": str(e)}
 
 
 @app.get("/api/status")

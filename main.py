@@ -248,7 +248,12 @@ _last_refresh: float = 0
 _fetch_count: int = 0
 _cache_lock = threading.Lock()
 _is_fetching = False
-FETCH_INTERVAL = 75  # seconds between refreshes
+
+FETCH_INTERVAL     = 15   # seconds between batch fetches
+BATCH_SIZE         = 23   # stocks per batch  (~6 batches × 15s = 90s full cycle)
+RATE_LIMIT_BACKOFF = 120  # seconds to pause after a rate-limit hit
+
+_batches = [STOCK_META[i:i+BATCH_SIZE] for i in range(0, len(STOCK_META), BATCH_SIZE)]
 
 # ── YFINANCE FETCH ────────────────────────────────────────────────────────────
 
@@ -263,10 +268,15 @@ def _download(syms: list, period: str, interval: str) -> object:
         threads=True,
     )
 
-def _parse_stocks(data, syms: list, prev_closes: dict) -> dict:
-    """Extract price, chg, high52, low52 from a yfinance DataFrame."""
+def _is_rate_limit(e: Exception) -> bool:
+    name = type(e).__name__
+    msg  = str(e)
+    return "RateLimit" in name or "Too Many" in msg or "rate limit" in msg.lower()
+
+def _parse_stocks(data, batch_meta: list, syms: list, prev_closes: dict) -> dict:
+    """Extract price, chg, high52, low52 from a yfinance DataFrame for a batch."""
     result = {}
-    for stock in STOCK_META:
+    for stock in batch_meta:
         try:
             df = data if len(syms) == 1 else data.get(stock["yf"])
             if df is None or df.empty:
@@ -277,10 +287,8 @@ def _parse_stocks(data, syms: list, prev_closes: dict) -> dict:
             cur = float(close.iloc[-1])
             if cur <= 0:
                 continue
-            # Use stored prev_close for accurate daily % change
             prev = prev_closes.get(stock["sym"], 0)
             if prev <= 0:
-                # Fallback: use second-to-last bar if available
                 prev = float(close.iloc[-2]) if len(close) >= 2 else cur
             result[stock["sym"]] = {
                 "price":      round(cur, 2),
@@ -313,96 +321,115 @@ def _parse_indices(data, syms: list) -> list:
             result.append({**idx, "val": 0, "chg": 0})
     return result
 
-def _refresh_cache():
-    global _stock_cache, _index_cache, _last_refresh, _fetch_count
-
-    stock_syms = [s["yf"] for s in STOCK_META]
-    idx_syms   = [i["yf"] for i in INDEX_META]
-
-    # Read stored prev_close values from current cache
-    with _cache_lock:
-        prev_closes = {sym: d.get("prev_close", 0) for sym, d in _stock_cache.items()}
-
-    t0 = time.time()
-
-    # ── Intraday fetch (1-minute bars, 15-min delayed NSE data) ──────────────
-    stocks, indices = {}, []
+def _refresh_indices():
+    """Fetch and persist index prices. Called once per full batch cycle."""
+    global _index_cache
+    idx_syms = [i["yf"] for i in INDEX_META]
     try:
-        data = _download(stock_syms, period="1d", interval="1m")
-        if data is not None and not data.empty:
-            stocks = _parse_stocks(data, stock_syms, prev_closes)
-            logger.info(f"Intraday: got {len(stocks)} stocks in {time.time()-t0:.1f}s")
+        idx_data = _download(idx_syms, period="5d", interval="1d")
+        if idx_data is not None and not idx_data.empty:
+            indices = _parse_indices(idx_data, idx_syms)
+            if indices:
+                ts = time.time()
+                db_save_indices(indices, ts)
+                with _cache_lock:
+                    _index_cache = indices
+                live = len([i for i in indices if i.get("val", 0) > 0])
+                logger.info(f"Indices: {live}/{len(indices)} updated")
     except Exception as e:
-        logger.warning(f"Intraday fetch failed: {e}")
+        logger.warning(f"Index refresh failed: {e}")
 
-    # ── Daily fallback (also used to set prev_close accurately) ──────────────
-    # Always run daily fetch so we have correct prev_close from yesterday's close
+def _refresh_batch(batch_idx: int) -> int:
+    """Fetch one stock batch, merge into cache, persist to DB. Returns count updated."""
+    global _stock_cache, _last_refresh, _fetch_count
+
+    batch = _batches[batch_idx]
+    syms  = [s["yf"] for s in batch]
+
+    with _cache_lock:
+        prev_closes = {s["sym"]: _stock_cache.get(s["sym"], {}).get("prev_close", 0) for s in batch}
+
+    t0     = time.time()
+    stocks: dict = {}
+
+    # ── Intraday (1-min bars) ─────────────────────────────────────────────────
     try:
-        daily = _download(stock_syms, period="5d", interval="1d")
+        data = _download(syms, period="1d", interval="1m")
+        if data is not None and not data.empty:
+            stocks = _parse_stocks(data, batch, syms, prev_closes)
+    except Exception as e:
+        if _is_rate_limit(e):
+            raise
+        logger.warning(f"Batch {batch_idx} intraday: {e}")
+
+    # ── Daily (accurate prev_close + 52-week range) ───────────────────────────
+    try:
+        daily = _download(syms, period="5d", interval="1d")
         if daily is not None and not daily.empty:
-            daily_stocks = _parse_stocks(daily, stock_syms, {})  # {} → uses iloc[-2] as prev
+            daily_stocks = _parse_stocks(daily, batch, syms, {})
             if not stocks:
                 stocks = daily_stocks
-                logger.info(f"Daily fallback: got {len(stocks)} stocks")
             else:
-                # Merge: take prev_close from daily data for accuracy
                 for sym, dd in daily_stocks.items():
                     if sym in stocks:
                         stocks[sym]["prev_close"] = dd["prev_close"]
                         stocks[sym]["high52"]     = dd["high52"]
                         stocks[sym]["low52"]      = dd["low52"]
-                        # Recompute chg with accurate prev_close
                         p = dd["prev_close"]
                         if p > 0:
                             stocks[sym]["chg"] = round((stocks[sym]["price"] - p) / p * 100, 2)
     except Exception as e:
-        logger.warning(f"Daily fetch failed: {e}")
+        if _is_rate_limit(e):
+            raise
+        logger.warning(f"Batch {batch_idx} daily: {e}")
 
-    # ── Indices ───────────────────────────────────────────────────────────────
-    try:
-        idx_data = _download(idx_syms, period="5d", interval="1d")
-        if idx_data is not None and not idx_data.empty:
-            indices = _parse_indices(idx_data, idx_syms)
-    except Exception as e:
-        logger.warning(f"Index fetch failed: {e}")
-
-    ts = time.time()
-
-    # ── Persist to SQLite ─────────────────────────────────────────────────────
     if stocks:
-        try:
-            db_save_stocks(stocks, ts)
-        except Exception as e:
-            logger.error(f"DB write error: {e}")
-    if indices:
-        try:
-            db_save_indices(indices, ts)
-        except Exception as e:
-            logger.error(f"DB index write error: {e}")
+        ts = time.time()
+        with _cache_lock:
+            _stock_cache.update(stocks)
+            _last_refresh = ts
+            _fetch_count += 1
+        db_save_stocks(stocks, ts)
 
-    # ── Update in-memory cache ────────────────────────────────────────────────
-    with _cache_lock:
-        if stocks:
-            _stock_cache = stocks
-        if indices:
-            _index_cache = indices
-        _last_refresh = ts
-        _fetch_count += 1
-
-    logger.info(f"Cache #{_fetch_count}: {len(stocks)} stocks, {len(indices)} indices — {ts - t0:.1f}s total")
+    logger.info(f"Batch {batch_idx+1}/{len(_batches)} ({len(syms)} syms): {len(stocks)} updated in {time.time()-t0:.1f}s")
+    return len(stocks)
 
 
 def _background_loop():
     global _is_fetching
+    batch_cursor  = 0
+    backoff_until = 0.0
+    n_batches     = len(_batches)
+
+    _refresh_indices()
+
     while True:
-        if not _is_fetching:
-            _is_fetching = True
-            try:
-                _refresh_cache()
-            except Exception as e:
-                logger.error(f"Refresh error: {e}")
-            finally:
-                _is_fetching = False
+        now = time.time()
+
+        if now < backoff_until:
+            remaining = int(backoff_until - now)
+            logger.info(f"Rate-limit backoff: {remaining}s remaining")
+            time.sleep(min(FETCH_INTERVAL, remaining))
+            continue
+
+        batch_idx    = batch_cursor % n_batches
+        _is_fetching = True
+        try:
+            _refresh_batch(batch_idx)
+            batch_cursor += 1
+        except Exception as e:
+            if _is_rate_limit(e):
+                backoff_until = time.time() + RATE_LIMIT_BACKOFF
+                logger.warning(f"Rate limited on batch {batch_idx} — backing off {RATE_LIMIT_BACKOFF}s")
+            else:
+                logger.error(f"Batch {batch_idx} error: {e}")
+                batch_cursor += 1
+        finally:
+            _is_fetching = False
+
+        if batch_cursor % n_batches == 0 and batch_cursor > 0:
+            _refresh_indices()
+
         time.sleep(FETCH_INTERVAL)
 
 
@@ -427,7 +454,7 @@ def startup():
     # Start background refresh thread
     t = threading.Thread(target=_background_loop, daemon=True)
     t.start()
-    logger.info(f"Background thread started — refresh every {FETCH_INTERVAL}s")
+    logger.info(f"Background thread started — {len(_batches)} batches × {FETCH_INTERVAL}s (~{len(_batches)*FETCH_INTERVAL}s full cycle)")
 
 
 # ── API ENDPOINTS ─────────────────────────────────────────────────────────────
@@ -446,6 +473,9 @@ def health():
             "cache_age_sec":  age,
             "last_refresh":   _last_refresh,
             "fetch_interval": FETCH_INTERVAL,
+            "batch_size":     BATCH_SIZE,
+            "n_batches":      len(_batches),
+            "full_cycle_sec": len(_batches) * FETCH_INTERVAL,
         }
 
 

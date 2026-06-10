@@ -81,7 +81,8 @@ STOCK_META = [
     {"sym":"VBL",         "yf":"VBL.NS",           "name":"Varun Beverages",           "mcap":0.73, "sector":"FMCG",       "idx":["nxt50","n100","n200"]},
     # Auto
     {"sym":"MARUTI",      "yf":"MARUTI.NS",        "name":"Maruti Suzuki",             "mcap":3.8,  "sector":"Auto",       "idx":["n50","n100","n200"]},
-    {"sym":"TATAMOTORS",  "yf":"TATAMOTORS.NS",    "name":"Tata Motors",               "mcap":3.6,  "sector":"Auto",       "idx":["n50","n100","n200"]},
+    {"sym":"TMCV",        "yf":"TMCV.NS",          "name":"Tata Motors CV",            "mcap":1.34, "sector":"Auto",       "idx":["n100","n200"]},
+    {"sym":"TMPV",        "yf":"TMPV.NS",          "name":"Tata Motors PV",            "mcap":1.43, "sector":"Auto",       "idx":["n100","n200"]},
     {"sym":"M&M",         "yf":"M%26M.NS",         "name":"Mahindra & Mahindra",       "mcap":2.9,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"BAJAJ-AUTO",  "yf":"BAJAJ-AUTO.NS",    "name":"Bajaj Auto",                "mcap":2.6,  "sector":"Auto",       "idx":["n50","n100","n200"]},
     {"sym":"EICHERMOT",   "yf":"EICHERMOT.NS",     "name":"Eicher Motors",             "mcap":1.2,  "sector":"Auto",       "idx":["n50","n100","n200"]},

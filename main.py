@@ -47,7 +47,7 @@ STOCK_META = [
     {"sym":"INFY",        "yf":"INFY.NS",          "name":"Infosys",                   "mcap":6.6,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"HCLTECH",     "yf":"HCLTECH.NS",       "name":"HCL Technologies",          "mcap":3.9,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"WIPRO",       "yf":"WIPRO.NS",         "name":"Wipro",                     "mcap":2.4,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
-    {"sym":"LTIM",        "yf":"LTIM.NS",          "name":"LTIMindtree",               "mcap":1.7,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
+    {"sym":"LTIM",        "yf":"LTIM.BO",          "name":"LTIMindtree",               "mcap":1.7,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"TECHM",       "yf":"TECHM.NS",         "name":"Tech Mahindra",             "mcap":1.2,  "sector":"IT",         "idx":["n50","nit","n100","n200"]},
     {"sym":"MPHASIS",     "yf":"MPHASIS.NS",       "name":"Mphasis",                   "mcap":0.46, "sector":"IT",         "idx":["nxt50","nit","n100","n200"]},
     {"sym":"PERSISTENT",  "yf":"PERSISTENT.NS",    "name":"Persistent Systems",        "mcap":0.70, "sector":"IT",         "idx":["nxt50","nit","n100","n200"]},
@@ -178,7 +178,7 @@ STOCK_META = [
 INDEX_META = [
     {"id":"n50",   "yf":"^NSEI",       "label":"NIFTY 50",       "tags":["n50"]},
     {"id":"bnk",   "yf":"^NSEBANK",    "label":"BANK NIFTY",     "tags":["bnk"]},
-    {"id":"nxt50", "yf":"^NSMIDCP50",  "label":"NIFTY NEXT 50",  "tags":["nxt50"]},
+    {"id":"nxt50", "yf":"^NSMIDCP",    "label":"NIFTY NEXT 50",  "tags":["nxt50"]},
     {"id":"n100",  "yf":"^CNX100",     "label":"NIFTY 100",      "tags":["n50","nxt50"]},
     {"id":"n200",  "yf":"^CNX200",     "label":"NIFTY 200",      "tags":["n50","nxt50","mid"]},
     {"id":"mid",   "yf":"^NSEMDCP50",  "label":"NIFTY MIDCAP",   "tags":["mid"]},

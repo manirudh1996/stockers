@@ -196,6 +196,7 @@ def _db() -> sqlite3.Connection:
     return conn
 
 def init_db():
+    current_syms = {s["sym"] for s in STOCK_META}
     with _db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS prices (
@@ -214,6 +215,15 @@ def init_db():
                 ts    REAL DEFAULT 0
             );
         """)
+        stale = conn.execute("SELECT sym FROM prices WHERE sym NOT IN ({})".format(
+            ",".join("?" * len(current_syms))
+        ), list(current_syms)).fetchall()
+        if stale:
+            stale_syms = [r["sym"] for r in stale]
+            conn.execute("DELETE FROM prices WHERE sym NOT IN ({})".format(
+                ",".join("?" * len(current_syms))
+            ), list(current_syms))
+            logger.info(f"Purged {len(stale_syms)} stale DB entries: {stale_syms}")
 
 def db_save_stocks(stocks: dict, ts: float):
     with _db() as conn:

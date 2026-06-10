@@ -396,26 +396,75 @@ def _refresh_batch(batch_idx: int) -> int:
 
 
 def _retry_zero_stocks():
-    """After each full cycle, retry any stock still at price=0 individually."""
+    """After each full cycle, retry any stock still at price=0 using multiple methods."""
     with _cache_lock:
         zero_stocks = [s for s in STOCK_META if _stock_cache.get(s["sym"], {}).get("price", 0) == 0]
 
     if not zero_stocks:
         return
 
-    logger.info(f"Singleton retry: {len(zero_stocks)} stocks still at price=0")
+    logger.info(f"Singleton retry: {len(zero_stocks)} stocks at price=0 — {[s['sym'] for s in zero_stocks]}")
+
     for stock in zero_stocks:
+        sym  = stock["sym"]
+        yfsym = stock["yf"]
+        df   = None
+
+        # Method 1: Ticker.history with 1-month window
         try:
-            df = yf.Ticker(stock["yf"]).history(period="5d", interval="1d")
+            df = yf.Ticker(yfsym).history(period="1mo", interval="1d")
             if df.empty:
-                continue
+                df = None
+                logger.info(f"  {sym} method1 (1mo history): empty")
+            else:
+                logger.info(f"  {sym} method1 (1mo history): {len(df)} rows")
+        except Exception as e:
+            logger.info(f"  {sym} method1 failed: {e}")
+            df = None
+
+        # Method 2: single-ticker yf.download
+        if df is None or df.empty:
+            time.sleep(3)
+            try:
+                df = yf.download(yfsym, period="5d", interval="1d", progress=False)
+                if df.empty:
+                    df = None
+                    logger.info(f"  {sym} method2 (download 5d): empty")
+                else:
+                    logger.info(f"  {sym} method2 (download 5d): {len(df)} rows")
+            except Exception as e:
+                logger.info(f"  {sym} method2 failed: {e}")
+                df = None
+
+        # Method 3: Ticker.history with max period
+        if df is None or df.empty:
+            time.sleep(3)
+            try:
+                df = yf.Ticker(yfsym).history(period="5d")
+                if df.empty:
+                    df = None
+                    logger.info(f"  {sym} method3 (5d history): empty")
+                else:
+                    logger.info(f"  {sym} method3 (5d history): {len(df)} rows")
+            except Exception as e:
+                logger.info(f"  {sym} method3 failed: {e}")
+                df = None
+
+        if df is None or df.empty:
+            logger.warning(f"  {sym} ALL 3 methods failed — symbol may be unavailable on Yahoo Finance")
+            time.sleep(3)
+            continue
+
+        # Parse result
+        try:
             close = df["Close"].dropna()
             if len(close) < 1:
+                logger.warning(f"  {sym} no Close data in result")
                 continue
-            cur = float(close.iloc[-1])
+            cur  = float(close.iloc[-1])
+            prev = float(close.iloc[-2]) if len(close) >= 2 else cur
             if cur <= 0:
                 continue
-            prev = float(close.iloc[-2]) if len(close) >= 2 else cur
             data = {
                 "price":      round(cur, 2),
                 "chg":        round((cur - prev) / prev * 100, 2) if prev > 0 else 0.0,
@@ -424,12 +473,13 @@ def _retry_zero_stocks():
                 "low52":      round(float(df["Low"].min()), 2),
             }
             with _cache_lock:
-                _stock_cache[stock["sym"]] = data
-            db_save_stocks({stock["sym"]: data}, time.time())
-            logger.info(f"Singleton OK {stock['sym']}: ₹{cur}")
+                _stock_cache[sym] = data
+            db_save_stocks({sym: data}, time.time())
+            logger.info(f"  {sym} FIXED: price=₹{cur}")
         except Exception as e:
-            logger.debug(f"Singleton retry {stock['sym']}: {e}")
-        time.sleep(2)  # gentle pacing between singleton requests
+            logger.warning(f"  {sym} parse error: {e}")
+
+        time.sleep(3)
 
 
 def _background_loop():
@@ -493,6 +543,12 @@ def startup():
     t = threading.Thread(target=_background_loop, daemon=True)
     t.start()
     logger.info(f"Background thread started — {len(_batches)} batches × {FETCH_INTERVAL}s (~{len(_batches)*FETCH_INTERVAL}s full cycle)")
+
+    # Schedule an early singleton retry 3 minutes after startup
+    def _delayed_retry():
+        time.sleep(180)
+        _retry_zero_stocks()
+    threading.Thread(target=_delayed_retry, daemon=True).start()
 
 
 # ── API ENDPOINTS ─────────────────────────────────────────────────────────────

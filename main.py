@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 import yfinance as yf
 import threading
+import sqlite3
 import time
 import logging
 import os
@@ -11,15 +12,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH  = os.path.join(BASE_DIR, "stockers.db")
 
 app = FastAPI(title="Stockers")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET"],
-    allow_headers=["*"],
-)
+# ── STOCK & INDEX METADATA ────────────────────────────────────────────────────
 
 STOCK_META = [
     # Banking
@@ -182,169 +180,320 @@ INDEX_META = [
     {"id":"nit",   "yf":"^CNXIT",      "label":"NIFTY IT",       "tags":["nit"]},
 ]
 
+# ── SQLITE ────────────────────────────────────────────────────────────────────
+
+def _db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+def init_db():
+    with _db() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS prices (
+                sym        TEXT PRIMARY KEY,
+                price      REAL DEFAULT 0,
+                chg        REAL DEFAULT 0,
+                prev_close REAL DEFAULT 0,
+                high52     REAL DEFAULT 0,
+                low52      REAL DEFAULT 0,
+                ts         REAL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS idx_prices (
+                id    TEXT PRIMARY KEY,
+                val   REAL DEFAULT 0,
+                chg   REAL DEFAULT 0,
+                ts    REAL DEFAULT 0
+            );
+        """)
+
+def db_save_stocks(stocks: dict, ts: float):
+    with _db() as conn:
+        conn.executemany(
+            "INSERT OR REPLACE INTO prices (sym,price,chg,prev_close,high52,low52,ts) VALUES (?,?,?,?,?,?,?)",
+            [(sym, d["price"], d["chg"], d["prev_close"], d["high52"], d["low52"], ts)
+             for sym, d in stocks.items()]
+        )
+
+def db_save_indices(indices: list, ts: float):
+    with _db() as conn:
+        conn.executemany(
+            "INSERT OR REPLACE INTO idx_prices (id,val,chg,ts) VALUES (?,?,?,?)",
+            [(i["id"], i["val"], i["chg"], ts) for i in indices if i.get("val", 0) > 0]
+        )
+
+def db_load_stocks() -> dict:
+    with _db() as conn:
+        rows = conn.execute("SELECT sym,price,chg,prev_close,high52,low52 FROM prices").fetchall()
+    return {r["sym"]: dict(r) for r in rows if r["price"] > 0}
+
+def db_load_indices() -> list:
+    with _db() as conn:
+        rows = conn.execute("SELECT id,val,chg FROM idx_prices").fetchall()
+    by_id = {r["id"]: dict(r) for r in rows}
+    return [{**m, **by_id.get(m["id"], {"val": 0, "chg": 0})} for m in INDEX_META]
+
+# ── IN-MEMORY CACHE ───────────────────────────────────────────────────────────
+
 _stock_cache: dict = {}
 _index_cache: list = []
 _last_refresh: float = 0
+_fetch_count: int = 0
 _cache_lock = threading.Lock()
-CACHE_TTL = 30  # seconds — background thread refresh interval
+_is_fetching = False
+FETCH_INTERVAL = 15  # seconds between refreshes
 
+# ── YFINANCE FETCH ────────────────────────────────────────────────────────────
 
-def _fetch_stocks() -> dict:
-    yf_syms = [s["yf"] for s in STOCK_META]
-    logger.info(f"yfinance: downloading {len(yf_syms)} stocks...")
-    try:
-        data = yf.download(
-            tickers=yf_syms,
-            period="5d",
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
-        )
-        cache = {}
-        for stock in STOCK_META:
-            try:
-                sym_yf = stock["yf"]
-                df = data if len(yf_syms) == 1 else data.get(sym_yf)
-                if df is None:
-                    continue
-                close = df["Close"].dropna()
-                if len(close) >= 2:
-                    cur  = float(close.iloc[-1])
-                    prev = float(close.iloc[-2])
-                    cache[stock["sym"]] = {
-                        "price":  round(cur, 2),
-                        "chg":    round((cur - prev) / prev * 100, 2),
-                        "high52": round(float(df["High"].dropna().max()), 2),
-                        "low52":  round(float(df["Low"].dropna().min()), 2),
-                    }
-            except Exception as e:
-                logger.debug(f"Skip {stock['sym']}: {e}")
-        logger.info(f"yfinance: got prices for {len(cache)}/{len(yf_syms)} stocks")
-        return cache
-    except Exception as e:
-        logger.error(f"Stock download failed: {e}")
-        return {}
+def _download(syms: list, period: str, interval: str) -> object:
+    return yf.download(
+        tickers=syms,
+        period=period,
+        interval=interval,
+        group_by="ticker",
+        auto_adjust=True,
+        progress=False,
+        threads=True,
+    )
 
+def _parse_stocks(data, syms: list, prev_closes: dict) -> dict:
+    """Extract price, chg, high52, low52 from a yfinance DataFrame."""
+    result = {}
+    for stock in STOCK_META:
+        try:
+            df = data if len(syms) == 1 else data.get(stock["yf"])
+            if df is None or df.empty:
+                continue
+            close = df["Close"].dropna()
+            if len(close) < 1:
+                continue
+            cur = float(close.iloc[-1])
+            if cur <= 0:
+                continue
+            # Use stored prev_close for accurate daily % change
+            prev = prev_closes.get(stock["sym"], 0)
+            if prev <= 0:
+                # Fallback: use second-to-last bar if available
+                prev = float(close.iloc[-2]) if len(close) >= 2 else cur
+            result[stock["sym"]] = {
+                "price":      round(cur, 2),
+                "chg":        round((cur - prev) / prev * 100, 2) if prev > 0 else 0.0,
+                "prev_close": round(prev, 2),
+                "high52":     round(float(df["High"].dropna().max()), 2),
+                "low52":      round(float(df["Low"].dropna().min()), 2),
+            }
+        except Exception as e:
+            logger.debug(f"Skip {stock['sym']}: {e}")
+    return result
 
-def _fetch_indices() -> list:
-    yf_syms = [i["yf"] for i in INDEX_META]
-    logger.info("yfinance: downloading indices...")
-    try:
-        data = yf.download(
-            tickers=yf_syms,
-            period="5d",
-            interval="1d",
-            group_by="ticker",
-            auto_adjust=True,
-            progress=False,
-            threads=True,
-        )
-        results = []
-        for idx in INDEX_META:
-            try:
-                df = data if len(yf_syms) == 1 else data.get(idx["yf"])
-                if df is None:
-                    results.append({**idx, "val": 0, "chg": 0})
-                    continue
-                close = df["Close"].dropna()
-                if len(close) >= 2:
-                    val  = float(close.iloc[-1])
-                    prev = float(close.iloc[-2])
-                    results.append({**idx, "val": round(val, 2), "chg": round((val - prev) / prev * 100, 2)})
-                else:
-                    results.append({**idx, "val": 0, "chg": 0})
-            except Exception as e:
-                logger.debug(f"Skip index {idx['id']}: {e}")
-                results.append({**idx, "val": 0, "chg": 0})
-        return results
-    except Exception as e:
-        logger.error(f"Index download failed: {e}")
-        return []
-
+def _parse_indices(data, syms: list) -> list:
+    result = []
+    for idx in INDEX_META:
+        try:
+            df = data if len(syms) == 1 else data.get(idx["yf"])
+            if df is None or df.empty:
+                result.append({**idx, "val": 0, "chg": 0})
+                continue
+            close = df["Close"].dropna()
+            if len(close) >= 2:
+                val  = float(close.iloc[-1])
+                prev = float(close.iloc[-2])
+                result.append({**idx, "val": round(val, 2), "chg": round((val - prev) / prev * 100, 2)})
+            else:
+                result.append({**idx, "val": 0, "chg": 0})
+        except Exception as e:
+            logger.debug(f"Skip index {idx['id']}: {e}")
+            result.append({**idx, "val": 0, "chg": 0})
+    return result
 
 def _refresh_cache():
-    global _stock_cache, _index_cache, _last_refresh
-    stocks  = _fetch_stocks()
-    indices = _fetch_indices()
+    global _stock_cache, _index_cache, _last_refresh, _fetch_count
+
+    stock_syms = [s["yf"] for s in STOCK_META]
+    idx_syms   = [i["yf"] for i in INDEX_META]
+
+    # Read stored prev_close values from current cache
+    with _cache_lock:
+        prev_closes = {sym: d.get("prev_close", 0) for sym, d in _stock_cache.items()}
+
+    t0 = time.time()
+
+    # ── Intraday fetch (1-minute bars, 15-min delayed NSE data) ──────────────
+    stocks, indices = {}, []
+    try:
+        data = _download(stock_syms, period="1d", interval="1m")
+        if data is not None and not data.empty:
+            stocks = _parse_stocks(data, stock_syms, prev_closes)
+            logger.info(f"Intraday: got {len(stocks)} stocks in {time.time()-t0:.1f}s")
+    except Exception as e:
+        logger.warning(f"Intraday fetch failed: {e}")
+
+    # ── Daily fallback (also used to set prev_close accurately) ──────────────
+    # Always run daily fetch so we have correct prev_close from yesterday's close
+    try:
+        daily = _download(stock_syms, period="5d", interval="1d")
+        if daily is not None and not daily.empty:
+            daily_stocks = _parse_stocks(daily, stock_syms, {})  # {} → uses iloc[-2] as prev
+            if not stocks:
+                stocks = daily_stocks
+                logger.info(f"Daily fallback: got {len(stocks)} stocks")
+            else:
+                # Merge: take prev_close from daily data for accuracy
+                for sym, dd in daily_stocks.items():
+                    if sym in stocks:
+                        stocks[sym]["prev_close"] = dd["prev_close"]
+                        stocks[sym]["high52"]     = dd["high52"]
+                        stocks[sym]["low52"]      = dd["low52"]
+                        # Recompute chg with accurate prev_close
+                        p = dd["prev_close"]
+                        if p > 0:
+                            stocks[sym]["chg"] = round((stocks[sym]["price"] - p) / p * 100, 2)
+    except Exception as e:
+        logger.warning(f"Daily fetch failed: {e}")
+
+    # ── Indices ───────────────────────────────────────────────────────────────
+    try:
+        idx_data = _download(idx_syms, period="5d", interval="1d")
+        if idx_data is not None and not idx_data.empty:
+            indices = _parse_indices(idx_data, idx_syms)
+    except Exception as e:
+        logger.warning(f"Index fetch failed: {e}")
+
+    ts = time.time()
+
+    # ── Persist to SQLite ─────────────────────────────────────────────────────
+    if stocks:
+        try:
+            db_save_stocks(stocks, ts)
+        except Exception as e:
+            logger.error(f"DB write error: {e}")
+    if indices:
+        try:
+            db_save_indices(indices, ts)
+        except Exception as e:
+            logger.error(f"DB index write error: {e}")
+
+    # ── Update in-memory cache ────────────────────────────────────────────────
     with _cache_lock:
         if stocks:
             _stock_cache = stocks
         if indices:
             _index_cache = indices
-        _last_refresh = time.time()
-    logger.info(f"Cache updated: {len(_stock_cache)} stocks, {len(_index_cache)} indices")
+        _last_refresh = ts
+        _fetch_count += 1
+
+    logger.info(f"Cache #{_fetch_count}: {len(stocks)} stocks, {len(indices)} indices — {ts - t0:.1f}s total")
 
 
 def _background_loop():
+    global _is_fetching
     while True:
-        try:
-            _refresh_cache()
-        except Exception as e:
-            logger.error(f"Background refresh error: {e}")
-        time.sleep(CACHE_TTL)
+        if not _is_fetching:
+            _is_fetching = True
+            try:
+                _refresh_cache()
+            except Exception as e:
+                logger.error(f"Refresh error: {e}")
+            finally:
+                _is_fetching = False
+        time.sleep(FETCH_INTERVAL)
 
+
+# ── STARTUP ───────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 def startup():
+    global _stock_cache, _index_cache, _last_refresh
+    init_db()
+
+    # Restore last known prices from SQLite immediately (zero wait for first user)
+    saved_stocks  = db_load_stocks()
+    saved_indices = db_load_indices()
+    with _cache_lock:
+        if saved_stocks:
+            _stock_cache = saved_stocks
+            logger.info(f"Restored {len(saved_stocks)} stocks from DB")
+        if any(i.get("val", 0) > 0 for i in saved_indices):
+            _index_cache = saved_indices
+            logger.info(f"Restored {len(saved_indices)} indices from DB")
+
+    # Start background refresh thread
     t = threading.Thread(target=_background_loop, daemon=True)
     t.start()
-    logger.info(f"Background refresh thread started (interval: {CACHE_TTL}s)")
+    logger.info(f"Background thread started — refresh every {FETCH_INTERVAL}s")
 
 
-# ── API ENDPOINTS ──────────────────────────────────────────────────────────────
+# ── API ENDPOINTS ─────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
     with _cache_lock:
+        age = round(time.time() - _last_refresh, 1) if _last_refresh else None
+        live_count = sum(1 for d in _stock_cache.values() if d.get("price", 0) > 0)
         return {
-            "status": "ok",
-            "cached_stocks": len(_stock_cache),
+            "status":         "ok",
+            "fetching":       _is_fetching,
+            "fetch_count":    _fetch_count,
+            "cached_stocks":  live_count,
             "cached_indices": len(_index_cache),
-            "last_refresh": _last_refresh,
-            "cache_age_seconds": round(time.time() - _last_refresh, 1) if _last_refresh else None,
+            "cache_age_sec":  age,
+            "last_refresh":   _last_refresh,
+            "fetch_interval": FETCH_INTERVAL,
         }
 
 
 @app.get("/api/stocks")
 def get_stocks():
     with _cache_lock:
+        ts = _last_refresh
         result = []
         for stock in STOCK_META:
-            live = _stock_cache.get(stock["sym"], {})
+            d = _stock_cache.get(stock["sym"], {})
             result.append({
                 "sym":    stock["sym"],
                 "name":   stock["name"],
                 "sector": stock["sector"],
                 "mcap":   stock["mcap"],
                 "idx":    stock["idx"],
-                "price":  live.get("price", 0),
-                "chg":    live.get("chg", 0),
-                "high52": live.get("high52", 0),
-                "low52":  live.get("low52", 0),
-                "live":   bool(live),
+                "price":  d.get("price", 0),
+                "chg":    d.get("chg", 0),
+                "high52": d.get("high52", 0),
+                "low52":  d.get("low52", 0),
+                "live":   d.get("price", 0) > 0,
             })
-        return {"stocks": result, "last_refresh": _last_refresh}
+    return {"stocks": result, "last_refresh": ts}
 
 
 @app.get("/api/indices")
 def get_indices():
     with _cache_lock:
+        ts = _last_refresh
         if _index_cache:
-            return {"indices": _index_cache, "last_refresh": _last_refresh}
-        return {
-            "indices": [{**i, "val": 0, "chg": 0} for i in INDEX_META],
-            "last_refresh": _last_refresh,
-        }
+            return {"indices": _index_cache, "last_refresh": ts}
+        return {"indices": [{**i, "val": 0, "chg": 0} for i in INDEX_META], "last_refresh": ts}
 
 
-# ── FRONTEND (catch-all serves index.html) ─────────────────────────────────────
+@app.get("/api/status")
+def status():
+    """Shows what's in SQLite right now."""
+    with _db() as conn:
+        stock_rows = conn.execute(
+            "SELECT sym, price, chg, ts FROM prices WHERE price > 0 ORDER BY sym LIMIT 10"
+        ).fetchall()
+        idx_rows = conn.execute("SELECT * FROM idx_prices").fetchall()
+    return {
+        "db_path":      DB_PATH,
+        "sample_stocks": [dict(r) for r in stock_rows],
+        "indices":       [dict(r) for r in idx_rows],
+    }
+
+
+# ── FRONTEND ──────────────────────────────────────────────────────────────────
 
 @app.get("/")
 def serve_root():
     return FileResponse(os.path.join(BASE_DIR, "index.html"))
-
 
 @app.get("/{full_path:path}")
 def serve_spa(full_path: str):

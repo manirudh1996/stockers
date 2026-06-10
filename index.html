@@ -1039,7 +1039,7 @@ function simulatePrices(){
     buildTreemap(filtered,'mainHeatmap',430);
 }
 setInterval(simulatePrices,6000);
-setInterval(pollLive,30000); // re-poll every 30s (matches server cache TTL)
+setInterval(pollLive,15000); // re-poll every 15s (matches server refresh interval)
 
 // ── PARTICLE BG ──
 (function(){

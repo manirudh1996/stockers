@@ -412,12 +412,10 @@ tbody tr:hover td{background:var(--surface2)}
     <svg viewBox="0 0 24 24" width="32" height="32"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
     <span>Sign in with Google</span>
   </div>
-  <h3>Welcome to Stockers</h3>
-  <p>Enter your email to continue</p>
-  <input type="email" id="gEmailInput" value="trader@gmail.com" placeholder="Email">
+  <h3>Coming Soon</h3>
+  <p style="text-align:center;color:var(--text2);margin:16px 0 24px;line-height:1.6">Google Sign In is on the way.<br>We're setting up Firebase — check back soon!</p>
   <div class="g-modal-btns">
-    <button class="g-btn-cancel" onclick="closeGoogleModal()">Cancel</button>
-    <button class="g-btn-next" onclick="doGoogleLogin()">Continue</button>
+    <button class="g-btn-next" onclick="closeGoogleModal()">Got it</button>
   </div>
 </div>
 
@@ -634,7 +632,7 @@ async function fetchLiveData(){
 }
 
 function refreshUI(){
-  buildTicker();
+  updateTicker();
   buildIndexSelector();
   const idx=INDICES.find(x=>x.id===activeIdx);
   const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
@@ -815,8 +813,18 @@ function closeSecDetail(){
 // ── TICKER ──
 function buildTicker(){
   const items=[...STOCKS].filter(s=>s.idx.includes('n50')||s.idx.includes('bnk')).sort(()=>0.5-Math.random());
-  const html=items.map(s=>`<span class="ti"><span class="ti-sym">${s.sym}</span><span class="ti-p">₹${fp(s.price)}</span><span class="${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</span></span>`).join('');
+  const html=items.map(s=>`<span class="ti" data-sym="${s.sym}"><span class="ti-sym">${s.sym}</span><span class="ti-p">₹${fp(s.price)}</span><span class="${s.chg>=0?'pos':'neg'}">${fc(s.chg)}</span></span>`).join('');
   document.getElementById('tickerTrack').innerHTML=html+html;
+}
+function updateTicker(){
+  document.querySelectorAll('#tickerTrack .ti[data-sym]').forEach(el=>{
+    const s=STOCKS.find(x=>x.sym===el.dataset.sym);
+    if(!s) return;
+    el.querySelector('.ti-p').textContent='₹'+fp(s.price);
+    const chgEl=el.children[2];
+    chgEl.className=s.chg>=0?'pos':'neg';
+    chgEl.textContent=fc(s.chg);
+  });
 }
 
 // ── WATCHLIST ──

@@ -7,6 +7,10 @@ import sqlite3
 import time
 import logging
 import os
+import requests
+import traceback
+import io
+import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -487,6 +491,70 @@ def status():
         "sample_stocks": [dict(r) for r in stock_rows],
         "indices":       [dict(r) for r in idx_rows],
     }
+
+
+# ── DIAGNOSTICS ──────────────────────────────────────────────────────────────
+
+@app.get("/api/diagnose")
+def diagnose():
+    results = {}
+
+    # Test 1 & 2: raw HTTP to Yahoo Finance
+    for label, url in [
+        ("1_yahoo_finance_homepage", "https://finance.yahoo.com"),
+        ("2_yahoo_query1",           "https://query1.finance.yahoo.com"),
+    ]:
+        try:
+            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            results[label] = {
+                "status_code": r.status_code,
+                "headers":     dict(r.headers),
+                "body_snippet": r.text[:500],
+            }
+        except Exception as e:
+            results[label] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    # Test 3 & 4: yf.Ticker.history
+    for label, sym in [
+        ("3_yf_ticker_AAPL",        "AAPL"),
+        ("4_yf_ticker_RELIANCE_NS", "RELIANCE.NS"),
+    ]:
+        try:
+            old_stderr = sys.stderr
+            sys.stderr = buf = io.StringIO()
+            df = yf.Ticker(sym).history(period="1d")
+            sys.stderr = old_stderr
+            results[label] = {
+                "rows":    len(df),
+                "columns": list(df.columns),
+                "sample":  df.tail(2).to_dict() if not df.empty else {},
+                "stderr":  buf.getvalue()[:500],
+            }
+        except Exception as e:
+            sys.stderr = old_stderr if 'old_stderr' in dir() else sys.stderr
+            results[label] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    # Test 5 & 6: yf.download
+    for label, sym in [
+        ("5_yf_download_AAPL",        "AAPL"),
+        ("6_yf_download_RELIANCE_NS", "RELIANCE.NS"),
+    ]:
+        try:
+            old_stderr = sys.stderr
+            sys.stderr = buf = io.StringIO()
+            df = yf.download(sym, period="1d", progress=False)
+            sys.stderr = old_stderr
+            results[label] = {
+                "rows":    len(df),
+                "columns": list(df.columns),
+                "sample":  df.tail(2).to_dict() if not df.empty else {},
+                "stderr":  buf.getvalue()[:500],
+            }
+        except Exception as e:
+            sys.stderr = old_stderr if 'old_stderr' in dir() else sys.stderr
+            results[label] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    return results
 
 
 # ── FRONTEND ──────────────────────────────────────────────────────────────────

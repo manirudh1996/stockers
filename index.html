@@ -639,6 +639,7 @@ let INDICES = [
   {id:'mid',   label:'NIFTY MIDCAP',   val:42567.30, chg:+1.67, tags:['mid']},
   {id:'sml',   label:'NIFTY SMALLCAP', val:16234.50, chg:+2.34, tags:['sml']},
   {id:'nit',   label:'NIFTY IT',       val:38456.70, chg:-1.23, tags:['nit']},
+  {id:'snsx',  label:'SENSEX',         val:0,        chg:0,     tags:['snsx'], headerOnly:true},
 ];
 
 const SECTOR_META={'Banking':'🏦','IT':'💻','Energy':'⚡','FMCG':'🛒','Auto':'🚗','Finance':'💰','Pharma':'💊','Infra':'🏗️','Power':'🔌','Defence':'🛡️','Consumer':'🎨','Healthcare':'🏥','Cement':'🏛️','Metals':'⚙️'};
@@ -733,8 +734,13 @@ function updateHeaderIndices(){
     el.textContent=(bnk.chg>=0?'▲':'▼')+Math.abs(bnk.chg).toFixed(2)+'%';
     el.className='h-idx-chg '+(bnk.chg>=0?'pos':'neg');
   }
-  // SENSEX not in our indices list; show placeholder
-  document.getElementById('hSNX').textContent='–';
+  const snsx=INDICES.find(x=>x.id==='snsx');
+  if(snsx&&snsx.val>0){
+    document.getElementById('hSNX').textContent=snsx.val.toLocaleString('en-IN',{maximumFractionDigits:0});
+    const eSNX=document.getElementById('hSNXc');
+    eSNX.textContent=(snsx.chg>=0?'▲':'▼')+Math.abs(snsx.chg).toFixed(2)+'%';
+    eSNX.className='h-idx-chg '+(snsx.chg>=0?'pos':'neg');
+  }
 }
 
 // ── TREEMAP ──
@@ -777,7 +783,7 @@ function buildTreemap(stocks,containerId,height){
 // ── INDEX SELECTOR ──
 function buildIndexSelector(){
   const el=document.getElementById('idxSelector');
-  el.innerHTML=INDICES.map(idx=>`
+  el.innerHTML=INDICES.filter(idx=>!idx.headerOnly).map(idx=>`
     <div class="idx-pill ${idx.id===activeIdx?'on':''}" id="ip-${idx.id}" onclick="selectIdx('${idx.id}')">
       <span class="idx-pill-name">${idx.label}</span>
       <span class="idx-pill-val">${idx.val>0?idx.val.toLocaleString('en-IN',{maximumFractionDigits:0}):'–'}</span>

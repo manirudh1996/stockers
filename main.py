@@ -186,6 +186,7 @@ INDEX_META = [
     {"id":"mid",   "yf":"^NSEMDCP50",  "label":"NIFTY MIDCAP",   "tags":["mid"]},
     {"id":"sml",   "yf":"^CNXSC",      "label":"NIFTY SMALLCAP", "tags":["sml"]},
     {"id":"nit",   "yf":"^CNXIT",      "label":"NIFTY IT",       "tags":["nit"]},
+    {"id":"snsx",  "yf":"^BSESN",      "label":"SENSEX",         "tags":["snsx"]},
 ]
 
 # ── SQLITE ────────────────────────────────────────────────────────────────────
@@ -378,7 +379,7 @@ def _refresh_batch(batch_idx: int) -> int:
 
     # ── Daily (accurate prev_close + 52-week range) ───────────────────────────
     try:
-        daily = _download(syms, period="5d", interval="1d")
+        daily = _download(syms, period="1y", interval="1d")
         if daily is not None and not daily.empty:
             daily_stocks = _parse_stocks(daily, batch, syms, {})
             if not stocks:
@@ -662,7 +663,7 @@ def get_quote(sym: str = Query(default="")):
     # Fetch live from Yahoo Finance
     yf_sym = sym + ".NS"
     try:
-        hist = yf.Ticker(yf_sym).history(period="5d", interval="1d")
+        hist = yf.Ticker(yf_sym).history(period="1y", interval="1d")
         if hist.empty:
             return {"sym": sym, "price": 0, "chg": 0, "high52": 0, "low52": 0, "live": False}
         price    = round(float(hist["Close"].iloc[-1]), 2)

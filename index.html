@@ -234,6 +234,50 @@ tbody tr:hover td{background:var(--surface2)}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+/* MOBILE */
+@media(max-width:640px){
+  header{flex-wrap:wrap;padding:8px 14px;gap:8px}
+  .logo{font-size:13px;letter-spacing:1px}
+  .logo svg{width:38px;height:20px}
+  .h-idx-wrap{display:none}
+  .live-badge{display:none}
+  #clockZone{display:none}
+  #apiStatus{display:none}
+  .g-login-btn{padding:5px 9px;font-size:11px}
+  .search-zone{order:3;flex:1 1 100%;max-width:100%}
+  .tabs-nav{padding:6px 12px;gap:1px}
+  .tnb{padding:5px 10px;font-size:12px}
+  main{padding:10px 12px;gap:12px}
+  .idx-pill{min-width:84px;padding:6px 10px}
+  .idx-pill-val{font-size:12px}
+  .idx-pill-name{font-size:8px}
+  .hm-wrap{height:280px}
+  .sec-hm-wrap{height:220px}
+  .sec-hdr{flex-direction:column;gap:8px}
+  .hm-meta{gap:6px;flex-wrap:wrap}
+  .hm-legend{flex-wrap:wrap;gap:4px}
+  .nifty-num{font-size:16px}
+  .movers-row{grid-template-columns:1fr}
+  .m-name{display:none}
+  .m-sym{width:auto;flex:1}
+  .m-price{font-size:11px}
+  .stock-popup{width:90vw;max-width:none;padding:16px;left:50%;transform:translate(-50%,-50%)}
+  .g-modal{width:90vw;max-width:320px}
+  .wl-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .sec-all-stocks{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .wl-top{flex-direction:column;align-items:flex-start;gap:8px}
+  .wl-add{width:100%}
+  .wl-add input{width:auto;flex:1}
+  .btn-add{white-space:nowrap}
+  .sector-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+  .sec-detail-hdr{flex-direction:column;gap:8px}
+  .sec-hdr-btns{flex-wrap:wrap;gap:6px}
+  .close-btn,.view-all-btn{font-size:12px;padding:5px 10px}
+  #searchDrop{max-height:220px}
+  .popup-price{font-size:24px}
+  .movers-card-title{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -427,6 +471,7 @@ tbody tr:hover td{background:var(--surface2)}
 // Set this to your Render backend URL after deploying, e.g.:
 // const API_BASE = 'https://stockers-api.onrender.com';
 const API_BASE = window.STOCKERS_API_URL || '';
+const hmH=b=>window.innerWidth<=640?Math.round(b*.62):b;
 
 // ── STATIC DATA (fallback + metadata) ──
 const STOCKS = [
@@ -642,9 +687,9 @@ function refreshUI(){
   renderMovers(filtered);
   updateHeaderIndices();
   if(document.getElementById('pane-market').classList.contains('on'))
-    requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',430));
+    requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',hmH(430)));
   if(document.getElementById('secDetailWrap').style.display!=='none'&&activeSecStocks.length)
-    requestAnimationFrame(()=>buildTreemap(activeSecStocks,'secHeatmap',380));
+    requestAnimationFrame(()=>buildTreemap(activeSecStocks,'secHeatmap',hmH(380)));
   renderSectors();
   renderWatchlist();
 }
@@ -734,7 +779,7 @@ function selectIdx(id){
   pill.style.background=idx.chg>=0?'var(--green-dim)':'var(--red-dim)';
   const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
   renderMovers(filtered);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',430)));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',hmH(430))));
 }
 
 // ── MOVERS ──
@@ -786,7 +831,7 @@ function openSecDetail(sec,stocks){
   document.getElementById('saTitle').textContent=`All ${sec} Stocks (${stocks.length})`;
   const wrap=document.getElementById('secDetailWrap');
   wrap.style.display='block';
-  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(stocks,'secHeatmap',380)));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(stocks,'secHeatmap',hmH(380))));
   renderSecAllTable(stocks);
   const top=wrap.getBoundingClientRect().top+window.scrollY-20;
   window.scrollTo({top,behavior:'smooth'});
@@ -979,7 +1024,7 @@ function goTab(name){
   if(name==='market'){
     const idx=INDICES.find(x=>x.id===activeIdx);
     const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
-    requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',430)));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>buildTreemap(filtered,'mainHeatmap',hmH(430))));
   }
 }
 
@@ -1100,7 +1145,7 @@ function simulatePrices(){
   buildIndexSelector();
   updateHeaderIndices();
   if(document.getElementById('pane-market').classList.contains('on'))
-    buildTreemap(filtered,'mainHeatmap',430);
+    buildTreemap(filtered,'mainHeatmap',hmH(430));
 }
 setInterval(simulatePrices,6000);
 setInterval(pollLive,15000); // re-poll every 15s (matches server refresh interval)
@@ -1139,7 +1184,7 @@ window.addEventListener('load',async()=>{
   buildTicker();buildIndexSelector();renderMovers();renderSectors();renderWatchlist();renderAuth();
   updateHeaderIndices();
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    buildTreemap(STOCKS.filter(s=>s.idx.includes('n50')),'mainHeatmap',430);
+    buildTreemap(STOCKS.filter(s=>s.idx.includes('n50')),'mainHeatmap',hmH(430));
   }));
   // Try live data on load
   const ok=await fetchLiveData();
@@ -1151,9 +1196,9 @@ window.addEventListener('resize',()=>{
     const idx=INDICES.find(x=>x.id===activeIdx);
     const filtered=STOCKS.filter(s=>s.idx.some(t=>idx.tags.includes(t)));
     if(document.getElementById('pane-market').classList.contains('on'))
-      buildTreemap(filtered,'mainHeatmap',430);
+      buildTreemap(filtered,'mainHeatmap',hmH(430));
     if(document.getElementById('secDetailWrap').style.display!=='none'&&activeSecStocks.length)
-      buildTreemap(activeSecStocks,'secHeatmap',380);
+      buildTreemap(activeSecStocks,'secHeatmap',hmH(380));
   },250);
 });
 </script>

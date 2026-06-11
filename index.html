@@ -235,6 +235,24 @@ tbody tr:hover td{background:var(--surface2)}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
 
+/* STRATEGY SUB-NAV */
+.strategy-subnav{display:flex;gap:6px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.stnb{padding:6px 18px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .2s}
+.stnb.on{background:var(--cyan-dim);border-color:rgba(0,229,255,0.3);color:var(--cyan)}
+.stnb:hover:not(.on){background:var(--surface);color:var(--text)}
+/* HMM */
+.hmm-regime-badge{display:inline-block;padding:7px 22px;border-radius:20px;font-size:13px;font-weight:700;font-family:var(--mono);border:2px solid;letter-spacing:.5px;white-space:nowrap}
+.hmm-regime-badge.bull{color:var(--green);border-color:var(--green);background:var(--green-dim)}
+.hmm-regime-badge.bear{color:var(--red);border-color:var(--red);background:var(--red-dim)}
+.hmm-regime-badge.neutral,.hmm-regime-badge.sideways{color:var(--gold);border-color:var(--gold);background:rgba(255,215,64,0.08)}
+.hmm-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.hmm-stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:4px}
+@media(max-width:640px){.hmm-stats-grid{grid-template-columns:1fr}}
+.hmm-trans{margin-top:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.hmm-trans-title{padding:8px 14px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.015)}
+.hmm-trans table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.hmm-trans th{padding:7px 10px;color:var(--text3);text-align:center;border:1px solid var(--border)}
+.hmm-trans td{padding:7px 10px;text-align:center;border:1px solid rgba(255,255,255,.04)}
 /* MONTE CARLO */
 .mc-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .mc-sym-wrap{position:relative;flex:1;min-width:180px}
@@ -373,7 +391,7 @@ tbody tr:hover td{background:var(--surface2)}
   <button class="tnb on" id="tb-market" onclick="goTab('market')">📊 Market Overview</button>
   <button class="tnb" id="tb-sectors" onclick="goTab('sectors')">🏭 Sectors</button>
   <button class="tnb" id="tb-watchlist" onclick="goTab('watchlist')">⭐ Watchlist <span class="wl-badge" id="wlBadge">0</span></button>
-  <button class="tnb" id="tb-mc" onclick="goTab('mc')">📈 Monte Carlo</button>
+  <button class="tnb" id="tb-mc" onclick="goTab('mc')">🧠 Strategy</button>
 </div>
 
 <main>
@@ -453,8 +471,13 @@ tbody tr:hover td{background:var(--surface2)}
     </div>
     <div id="wlContent"></div>
   </div>
-  <!-- MONTE CARLO TAB -->
+  <!-- STRATEGY TAB -->
   <div class="tab-pane" id="pane-mc">
+    <div class="strategy-subnav">
+      <button class="stnb on" id="st-mc"  onclick="goStrategy('mc')">📈 Monte Carlo</button>
+      <button class="stnb"    id="st-hmm" onclick="goStrategy('hmm')">🔮 Market Regimes (HMM)</button>
+    </div>
+    <div id="strategy-mc">
     <div class="mc-controls">
       <div class="mc-sym-wrap">
         <input id="mcSym" type="text" placeholder="Stock symbol: RELIANCE, TCS, INFY…" autocomplete="off">
@@ -503,7 +526,53 @@ tbody tr:hover td{background:var(--surface2)}
       <div class="mc-stats-grid" id="mcStats"></div>
       <div class="mc-disclaimer">📌 Simulation uses 2 years of historical data, GBM model with daily log returns. Past performance is not indicative of future results. Not financial advice.</div>
     </div>
-  </div>
+  </div><!-- end strategy-mc -->
+
+  <div id="strategy-hmm" style="display:none">
+    <div class="mc-controls">
+      <div class="mc-sym-wrap">
+        <input id="hmmSym" type="text" placeholder="Stock symbol: RELIANCE, TCS, INFY…" autocomplete="off">
+        <div id="hmmSDrop" class="mc-sdrop"></div>
+      </div>
+      <select id="hmmPeriod" class="mc-sel">
+        <option value="1y">1 Year</option>
+        <option value="2y" selected>2 Years</option>
+        <option value="5y">5 Years</option>
+      </select>
+      <select id="hmmStates" class="mc-sel">
+        <option value="2">2 States</option>
+        <option value="3" selected>3 States</option>
+        <option value="4">4 States</option>
+      </select>
+      <button class="mc-run" id="hmmRunBtn" onclick="runHMM()">🔮 Detect Regimes</button>
+    </div>
+
+    <div id="hmmEmpty" class="mc-empty">
+      <div class="mc-empty-icon">🔮</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Hidden Markov Model — Market Regimes</div>
+      <div style="font-size:13px;color:var(--text3);max-width:420px;margin:0 auto;line-height:1.7">Enter a stock symbol to detect hidden market regimes (Bear / Neutral / Bull) using <strong style="color:var(--cyan)">Gaussian HMM</strong> trained on daily returns and rolling volatility.</div>
+    </div>
+
+    <div id="hmmLoading" style="display:none;text-align:center;padding:60px">
+      <div style="font-size:32px;margin-bottom:12px">⏳</div>
+      <div style="color:var(--text2);font-size:13px">Training HMM model on server…</div>
+    </div>
+
+    <div id="hmmResult" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="sec-title" id="hmmTitle">–</div>
+          <div class="sec-sub" id="hmmSub">–</div>
+        </div>
+        <div id="hmmCurrentBadge" class="hmm-regime-badge">–</div>
+      </div>
+      <canvas id="hmmCanvas" style="display:block;width:100%;border-radius:12px;border:1px solid rgba(0,229,255,0.1)"></canvas>
+      <div class="hmm-stats-grid" id="hmmStats"></div>
+      <div id="hmmTrans"></div>
+      <div class="mc-disclaimer">📌 HMM trained on historical returns + rolling volatility. States auto-labelled by mean daily return. Not financial advice.</div>
+    </div>
+  </div><!-- end strategy-hmm -->
+  </div><!-- end pane-mc -->
 </main>
 </div>
 
@@ -1343,6 +1412,151 @@ function renderMCChart(data){
   // Start dot
   ctx.beginPath(); ctx.arc(xS(0),yS(last),4.5,0,Math.PI*2);
   ctx.fillStyle='#ffd740'; ctx.fill();
+}
+
+// ── STRATEGY SUB-NAV ──
+window.goStrategy=function(name){
+  ['mc','hmm'].forEach(n=>{
+    document.getElementById('strategy-'+n).style.display=n===name?'':'none';
+    document.getElementById('st-'+n).classList.toggle('on',n===name);
+  });
+};
+
+// ── HMM ──
+(function(){
+  const inp=document.getElementById('hmmSym');
+  const drop=document.getElementById('hmmSDrop');
+  inp.addEventListener('input',function(){
+    const q=this.value.trim().toUpperCase();
+    if(!q){drop.classList.remove('open');return;}
+    const hits=STOCKS.filter(s=>s.sym.includes(q)||s.name.toUpperCase().includes(q)).slice(0,8);
+    if(!hits.length){drop.classList.remove('open');return;}
+    drop.innerHTML=hits.map(s=>`<div class="sdr" onclick="hmmPick('${s.sym}')">
+      <div class="sdr-l"><span class="sdr-sym">${s.sym}</span><span class="sdr-name">${s.name}</span></div>
+    </div>`).join('');
+    drop.classList.add('open');
+  });
+  document.addEventListener('click',e=>{if(!e.target.closest('.mc-sym-wrap')&&!e.target.closest('#hmmSDrop'))drop.classList.remove('open');});
+})();
+window.hmmPick=function(sym){
+  document.getElementById('hmmSym').value=sym;
+  document.getElementById('hmmSDrop').classList.remove('open');
+};
+window.runHMM=async function(){
+  const sym=document.getElementById('hmmSym').value.trim().toUpperCase();
+  const period=document.getElementById('hmmPeriod').value;
+  const n_states=document.getElementById('hmmStates').value;
+  if(!sym){alert('Enter a stock symbol first');return;}
+  document.getElementById('hmmEmpty').style.display='none';
+  document.getElementById('hmmResult').style.display='none';
+  document.getElementById('hmmLoading').style.display='block';
+  document.getElementById('hmmRunBtn').disabled=true;
+  try{
+    const r=await fetch(`/api/hmm?sym=${encodeURIComponent(sym)}&period=${period}&n_states=${n_states}`);
+    const data=await r.json();
+    if(!r.ok||data.error)throw new Error(data.error||data.detail||'Server error');
+    document.getElementById('hmmLoading').style.display='none';
+    document.getElementById('hmmResult').style.display='block';
+    const lbl=data.current_label||'–';
+    document.getElementById('hmmTitle').textContent=data.sym+' — Market Regime Detection (HMM)';
+    document.getElementById('hmmSub').textContent='Current price ₹'+fp(data.last_price)+' · Period: '+period+' · '+n_states+' states';
+    const badge=document.getElementById('hmmCurrentBadge');
+    badge.textContent='Current: '+lbl;
+    badge.className='hmm-regime-badge '+(lbl.toLowerCase().includes('bull')?'bull':lbl.toLowerCase().includes('bear')?'bear':'neutral');
+    requestAnimationFrame(()=>renderHMMChart(data));
+    // Stats grid — state_stats is a dict keyed by state id; sort by mean_ret_d ascending (Bear→Bull)
+    const statsArr=Object.values(data.state_stats).sort((a,b)=>a.mean_ret_d-b.mean_ret_d);
+    const cols=statsArr.map(s=>`
+      <div class="hmm-stat-card">
+        <div class="hmm-regime-badge ${s.label.toLowerCase().includes('bull')?'bull':s.label.toLowerCase().includes('bear')?'bear':'neutral'}" style="margin-bottom:8px">${s.label}</div>
+        <div class="mc-stat-row"><span class="mc-stat-label">Days in regime</span><span class="mc-stat-val">${s.count}</span></div>
+        <div class="mc-stat-row"><span class="mc-stat-label">% of time</span><span class="mc-stat-val">${s.pct.toFixed(1)}%</span></div>
+        <div class="mc-stat-row"><span class="mc-stat-label">Avg daily return</span><span class="mc-stat-val ${s.mean_ret_d>=0?'pos':'neg'}">${s.mean_ret_d.toFixed(3)}%</span></div>
+        <div class="mc-stat-row"><span class="mc-stat-label">Avg volatility</span><span class="mc-stat-val">${s.mean_vol_d.toFixed(2)}%</span></div>
+      </div>`).join('');
+    document.getElementById('hmmStats').innerHTML=cols;
+    // Transition matrix — rows ordered by state id (0,1,2)
+    const stateKeys=Object.keys(data.state_stats).sort((a,b)=>+a-+b);
+    const stateLabels=stateKeys.map(k=>data.state_stats[k].label);
+    const tm=data.trans_matrix;
+    let tbl=`<div class="hmm-trans"><div style="font-size:12px;color:var(--text2);margin-bottom:8px">State Transition Probabilities</div><table><tr><th></th>${stateLabels.map(s=>`<th>${s}</th>`).join('')}</tr>`;
+    tm.forEach((row,i)=>{
+      tbl+=`<tr><td style="color:var(--text2);font-size:11px">${stateLabels[i]||i}</td>${row.map(v=>`<td>${(v*100).toFixed(1)}%</td>`).join('')}</tr>`;
+    });
+    tbl+=`</table></div>`;
+    document.getElementById('hmmTrans').innerHTML=tbl;
+  }catch(e){
+    document.getElementById('hmmLoading').style.display='none';
+    document.getElementById('hmmEmpty').style.display='block';
+    document.getElementById('hmmEmpty').querySelector('.mc-empty-icon').textContent='⚠️';
+    document.getElementById('hmmEmpty').querySelector('[style*="font-size:16px"]').textContent='Error: '+e.message;
+  }finally{
+    document.getElementById('hmmRunBtn').disabled=false;
+  }
+};
+function renderHMMChart(data){
+  const canvas=document.getElementById('hmmCanvas');
+  const W=canvas.parentElement.offsetWidth||800;
+  const H=window.innerWidth<=640?260:380;
+  canvas.width=W; canvas.height=H; canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');
+  const {timeline,state_stats}=data;
+  const prices=timeline.map(t=>t.price);
+  const PAD={l:72,r:16,t:18,b:34};
+  const cW=W-PAD.l-PAD.r, cH=H-PAD.t-PAD.b;
+  const minP=Math.min(...prices)*0.98, maxP=Math.max(...prices)*1.02;
+  const n=prices.length;
+  const xS=i=>PAD.l+(i/(n-1))*cW;
+  const yS=p=>PAD.t+cH-((p-minP)/(maxP-minP))*cH;
+  // State colors
+  const stateColors={'bull':'rgba(0,230,118,0.18)','neutral':'rgba(255,193,7,0.15)','bear':'rgba(255,82,82,0.18)'};
+  // Background
+  ctx.fillStyle='#060e1c'; ctx.fillRect(0,0,W,H);
+  // Shade regime bands
+  let segStart=0;
+  for(let i=1;i<=n;i++){
+    const changed=i===n||timeline[i].state!==timeline[i-1].state;
+    if(changed){
+      const lbl=(timeline[segStart].label||'').toLowerCase();
+      const color=lbl.includes('bull')?stateColors.bull:lbl.includes('bear')?stateColors.bear:stateColors.neutral;
+      ctx.fillStyle=color;
+      ctx.fillRect(xS(segStart),PAD.t,xS(Math.min(i,n-1))-xS(segStart),cH);
+      segStart=i;
+    }
+  }
+  // Grid
+  for(let i=0;i<=5;i++){
+    const y=PAD.t+(cH/5)*i;
+    ctx.strokeStyle='rgba(0,229,255,0.06)'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+    const price=maxP-(maxP-minP)*(i/5);
+    ctx.fillStyle='rgba(220,232,255,0.38)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='right';
+    ctx.fillText('₹'+price.toLocaleString('en-IN',{maximumFractionDigits:0}),PAD.l-5,y+4);
+  }
+  // Date labels
+  [0,0.25,0.5,0.75,1].forEach(f=>{
+    const idx=Math.round(f*(n-1));
+    if(idx<timeline.length){
+      ctx.fillStyle='rgba(220,232,255,0.38)'; ctx.textAlign='center'; ctx.font='10px JetBrains Mono,monospace';
+      ctx.fillText(timeline[idx].date.slice(5),PAD.l+f*cW,H-8);
+    }
+  });
+  // Price line
+  ctx.beginPath();
+  prices.forEach((p,i)=>i===0?ctx.moveTo(xS(i),yS(p)):ctx.lineTo(xS(i),yS(p)));
+  ctx.strokeStyle='#00e5ff'; ctx.lineWidth=1.8; ctx.stroke();
+  // Legend
+  const legItems=[
+    {color:'rgba(0,230,118,0.45)',label:'Bull'},
+    {color:'rgba(255,193,7,0.4)',label:'Neutral'},
+    {color:'rgba(255,82,82,0.45)',label:'Bear'}
+  ];
+  legItems.forEach((item,i)=>{
+    const lx=PAD.l+i*90, ly=PAD.t+8;
+    ctx.fillStyle=item.color; ctx.fillRect(lx,ly,14,10);
+    ctx.fillStyle='rgba(220,232,255,0.55)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='left';
+    ctx.fillText(item.label,lx+18,ly+9);
+  });
 }
 
 // ── SIMULATION (fallback when API unavailable) ──

@@ -756,6 +756,109 @@ def diagnose():
     return results
 
 
+# ── HMM MARKET REGIMES ────────────────────────────────────────────────────────
+
+@app.get("/api/hmm")
+def hmm_regime(
+    sym:      str = Query(default=""),
+    n_states: int = Query(default=3, ge=2, le=4),
+    period:   str = Query(default="2y"),
+):
+    sym = sym.upper().strip()
+    if not sym:
+        return {"error": "sym required"}
+    if period not in ("1y","2y","3y","5y"):
+        period = "2y"
+
+    yf_sym = sym if sym.startswith("^") else sym + ".NS"
+
+    try:
+        from hmmlearn.hmm import GaussianHMM
+
+        hist = yf.Ticker(yf_sym).history(period=period, interval="1d")
+        if hist.empty or len(hist) < 60:
+            return {"error": f"Insufficient historical data for {sym}"}
+
+        closes     = hist["Close"].dropna()
+        returns    = closes.pct_change()
+        volatility = returns.rolling(window=20).std()
+
+        df = pd.DataFrame({
+            "Close":      closes,
+            "Returns":    returns,
+            "Volatility": volatility,
+        }).dropna()
+
+        if len(df) < 40:
+            return {"error": "Not enough data after feature computation"}
+
+        features = np.column_stack([df["Returns"].values, df["Volatility"].values])
+
+        model = GaussianHMM(
+            n_components=n_states,
+            covariance_type="full",
+            n_iter=1000,
+            random_state=42,
+        )
+        model.fit(features)
+        hidden_states = model.predict(features)
+
+        # Auto-label states by ascending mean daily return
+        sorted_by_ret = sorted(range(n_states), key=lambda i: model.means_[i, 0])
+        labels_map = {2: ["Bear","Bull"], 3: ["Bear","Neutral","Bull"], 4: ["Bear","Sideways","Neutral","Bull"]}
+        labels     = labels_map.get(n_states, ["Bear","Neutral","Bull"])
+        state_label = {sorted_by_ret[i]: labels[i] for i in range(n_states)}
+
+        # Timeline for chart
+        timeline = [
+            {
+                "date":  df.index[i].strftime("%Y-%m-%d"),
+                "price": round(float(df["Close"].iloc[i]), 2),
+                "state": int(hidden_states[i]),
+                "label": state_label[hidden_states[i]],
+            }
+            for i in range(len(df))
+        ]
+
+        # Per-state statistics
+        state_stats = {}
+        for sid, lbl in state_label.items():
+            mask   = hidden_states == sid
+            rets   = df["Returns"].values[mask]
+            vols   = df["Volatility"].values[mask]
+            state_stats[str(sid)] = {
+                "label":      lbl,
+                "count":      int(mask.sum()),
+                "pct":        round(float(mask.mean() * 100), 1),
+                "mean_ret_d": round(float(rets.mean() * 100), 3),
+                "mean_vol_d": round(float(vols.mean() * 100), 3),
+                "mean_ret_y": round(float(rets.mean() * 252 * 100), 2),
+            }
+
+        trans = [[round(float(v), 3) for v in row] for row in model.transmat_.tolist()]
+        current_state = int(hidden_states[-1])
+
+        return {
+            "sym":           sym,
+            "n_states":      n_states,
+            "period":        period,
+            "current_state": current_state,
+            "current_label": state_label[current_state],
+            "state_labels":  {str(k): v for k, v in state_label.items()},
+            "timeline":      timeline,
+            "state_stats":   state_stats,
+            "trans_matrix":  trans,
+            "last_price":    round(float(df["Close"].iloc[-1]), 2),
+            "total_days":    len(df),
+        }
+
+    except ImportError:
+        return {"error": "hmmlearn not installed on server"}
+    except Exception as e:
+        logger.error(f"HMM {sym}: {e}")
+        return {"error": str(e)}
+
+
 # ── MONTE CARLO ───────────────────────────────────────────────────────────────
 
 @app.get("/api/montecarlo")

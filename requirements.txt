@@ -4,3 +4,4 @@ yfinance==1.4.1
 curl_cffi>=0.15
 pandas==2.2.2
 numpy>=1.26.0
+hmmlearn>=0.3.0

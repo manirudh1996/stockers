@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import yfinance as yf
 import numpy as np
+import pandas as pd
 import threading
 import sqlite3
 import time

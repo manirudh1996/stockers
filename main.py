@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import yfinance as yf
+import numpy as np
 import threading
 import sqlite3
 import time
@@ -753,6 +754,92 @@ def diagnose():
            lambda: yf.download("RELIANCE.NS", period="1d", progress=False))
 
     return results
+
+
+# ── MONTE CARLO ───────────────────────────────────────────────────────────────
+
+@app.get("/api/montecarlo")
+def montecarlo(
+    sym:  str = Query(default=""),
+    days: int = Query(default=252, ge=30, le=504),
+    sims: int = Query(default=500, ge=100, le=1000),
+):
+    sym = sym.upper().strip()
+    if not sym:
+        return {"error": "sym required"}
+
+    yf_sym = sym if sym.startswith("^") else sym + ".NS"
+
+    try:
+        hist = yf.Ticker(yf_sym).history(period="2y", interval="1d")
+        if hist.empty or len(hist) < 30:
+            return {"error": f"Insufficient historical data for {sym}"}
+
+        closes      = hist["Close"].dropna()
+        log_ret     = np.log(closes / closes.shift(1)).dropna().values
+        mu          = float(log_ret.mean())
+        sigma       = float(log_ret.std())
+        last_price  = float(closes.iloc[-1])
+        drift       = mu - 0.5 * sigma ** 2
+
+        # GBM simulation — vectorised
+        shocks      = np.random.normal(0, 1, (sims, days))
+        daily_ret   = np.exp(drift + sigma * shocks)
+        paths       = np.empty((sims, days + 1))
+        paths[:, 0] = last_price
+        for d in range(1, days + 1):
+            paths[:, d] = paths[:, d - 1] * daily_ret[:, d - 1]
+
+        # Downsample time axis to ≤60 points for payload efficiency
+        step     = max(1, days // 60)
+        t_idx    = list(range(0, days + 1, step))
+        if t_idx[-1] != days:
+            t_idx.append(days)
+        paths_ds = paths[:, t_idx]
+
+        bands = [
+            {
+                "t":   int(t_idx[i]),
+                "p5":  round(float(np.percentile(paths_ds[:, i],  5)), 2),
+                "p25": round(float(np.percentile(paths_ds[:, i], 25)), 2),
+                "p50": round(float(np.percentile(paths_ds[:, i], 50)), 2),
+                "p75": round(float(np.percentile(paths_ds[:, i], 75)), 2),
+                "p95": round(float(np.percentile(paths_ds[:, i], 95)), 2),
+            }
+            for i in range(len(t_idx))
+        ]
+
+        # 20 representative paths for chart lines
+        idx_sample   = np.random.choice(sims, min(20, sims), replace=False)
+        sample_paths = [[round(float(v), 2) for v in paths[i, t_idx]] for i in idx_sample]
+
+        final = paths[:, -1]
+        stats = {
+            "mean":      round(float(final.mean()), 2),
+            "median":    round(float(np.median(final)), 2),
+            "p5":        round(float(np.percentile(final,  5)), 2),
+            "p25":       round(float(np.percentile(final, 25)), 2),
+            "p75":       round(float(np.percentile(final, 75)), 2),
+            "p95":       round(float(np.percentile(final, 95)), 2),
+            "prob_gain": round(float((final > last_price).mean() * 100), 1),
+        }
+
+        return {
+            "sym":          sym,
+            "last_price":   round(last_price, 2),
+            "days":         days,
+            "sims":         sims,
+            "mu":           round(mu * 252, 4),            # annualised
+            "sigma":        round(sigma * (252 ** 0.5), 4), # annualised
+            "bands":        bands,
+            "sample_paths": sample_paths,
+            "t_indices":    t_idx,
+            "stats":        stats,
+        }
+
+    except Exception as e:
+        logger.error(f"Monte Carlo {sym}: {e}")
+        return {"error": str(e)}
 
 
 # ── FRONTEND ──────────────────────────────────────────────────────────────────

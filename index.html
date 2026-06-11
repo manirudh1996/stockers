@@ -235,6 +235,29 @@ tbody tr:hover td{background:var(--surface2)}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
 
+/* MONTE CARLO */
+.mc-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.mc-sym-wrap{position:relative;flex:1;min-width:180px}
+.mc-sym-wrap input{width:100%;padding:8px 13px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s}
+.mc-sym-wrap input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-glow)}
+.mc-sym-wrap input::placeholder{color:var(--text3)}
+.mc-sel{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;cursor:pointer;transition:border-color .2s}
+.mc-sel:focus{border-color:var(--cyan)}
+.mc-run{padding:8px 22px;background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.3);border-radius:9px;color:var(--cyan);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.mc-run:hover{background:var(--cyan-glow)}
+.mc-run:disabled{opacity:.45;cursor:not-allowed}
+.mc-sdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0a1525;border:1px solid var(--border2);border-radius:9px;z-index:600;display:none;box-shadow:0 12px 40px rgba(0,0,0,.6);max-height:200px;overflow-y:auto}
+.mc-sdrop.open{display:block}
+.mc-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.mc-stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px}
+.mc-stat-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.mc-stat-val{font-family:var(--mono);font-size:15px;font-weight:600}
+.mc-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text2);margin:10px 0}
+.mc-leg-sq{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.mc-disclaimer{font-size:11px;color:var(--text3);font-style:italic;margin-top:6px}
+.mc-empty{text-align:center;padding:80px 20px}
+.mc-empty-icon{font-size:48px;margin-bottom:16px}
+
 /* MOBILE */
 @media(max-width:640px){
   header{flex-wrap:wrap;padding:8px 14px;gap:8px}
@@ -277,6 +300,9 @@ tbody tr:hover td{background:var(--surface2)}
   #searchDrop{max-height:220px}
   .popup-price{font-size:24px}
   .movers-card-title{font-size:12px}
+  .mc-controls{flex-direction:column}
+  .mc-sym-wrap,.mc-sel,.mc-run{width:100%}
+  .mc-stats-grid{grid-template-columns:repeat(2,1fr)}
 }
 </style>
 </head>
@@ -347,6 +373,7 @@ tbody tr:hover td{background:var(--surface2)}
   <button class="tnb on" id="tb-market" onclick="goTab('market')">📊 Market Overview</button>
   <button class="tnb" id="tb-sectors" onclick="goTab('sectors')">🏭 Sectors</button>
   <button class="tnb" id="tb-watchlist" onclick="goTab('watchlist')">⭐ Watchlist <span class="wl-badge" id="wlBadge">0</span></button>
+  <button class="tnb" id="tb-mc" onclick="goTab('mc')">📈 Monte Carlo</button>
 </div>
 
 <main>
@@ -425,6 +452,57 @@ tbody tr:hover td{background:var(--surface2)}
       </div>
     </div>
     <div id="wlContent"></div>
+  </div>
+  <!-- MONTE CARLO TAB -->
+  <div class="tab-pane" id="pane-mc">
+    <div class="mc-controls">
+      <div class="mc-sym-wrap">
+        <input id="mcSym" type="text" placeholder="Stock symbol: RELIANCE, TCS, INFY…" autocomplete="off">
+        <div id="mcSDrop" class="mc-sdrop"></div>
+      </div>
+      <select id="mcDays" class="mc-sel">
+        <option value="30">30 Days</option>
+        <option value="90">3 Months</option>
+        <option value="180">6 Months</option>
+        <option value="252" selected>1 Year</option>
+        <option value="504">2 Years</option>
+      </select>
+      <select id="mcSims" class="mc-sel">
+        <option value="200">200 Paths</option>
+        <option value="500" selected>500 Paths</option>
+        <option value="1000">1000 Paths</option>
+      </select>
+      <button class="mc-run" id="mcRunBtn" onclick="runMonteCarlo()">▶ Simulate</button>
+    </div>
+
+    <div id="mcEmpty" class="mc-empty">
+      <div class="mc-empty-icon">📈</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Monte Carlo Price Simulation</div>
+      <div style="font-size:13px;color:var(--text3);max-width:420px;margin:0 auto;line-height:1.7">Enter a stock symbol and simulate thousands of possible future price paths using <strong style="color:var(--cyan)">Geometric Brownian Motion</strong> — the same model used by financial institutions for risk modelling.</div>
+    </div>
+
+    <div id="mcLoading" style="display:none;text-align:center;padding:60px">
+      <div style="font-size:32px;margin-bottom:12px">⏳</div>
+      <div style="color:var(--text2);font-size:13px">Running simulation on server…</div>
+    </div>
+
+    <div id="mcResult" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="sec-title" id="mcTitle">–</div>
+          <div class="sec-sub" id="mcSub">–</div>
+        </div>
+      </div>
+      <canvas id="mcCanvas" style="display:block;width:100%;border-radius:12px;border:1px solid rgba(0,229,255,0.1)"></canvas>
+      <div class="mc-legend" style="margin-top:10px">
+        <span><span class="mc-leg-sq" style="background:rgba(0,229,255,0.35)"></span>25–75th pct band</span>
+        <span><span class="mc-leg-sq" style="background:rgba(0,229,255,0.1)"></span>5–95th pct band</span>
+        <span><span class="mc-leg-sq" style="background:#00e5ff;height:2px;border-radius:0"></span>Median path</span>
+        <span><span class="mc-leg-sq" style="background:#ffd740;height:2px;border-radius:0"></span>Current price</span>
+      </div>
+      <div class="mc-stats-grid" id="mcStats"></div>
+      <div class="mc-disclaimer">📌 Simulation uses 2 years of historical data, GBM model with daily log returns. Past performance is not indicative of future results. Not financial advice.</div>
+    </div>
   </div>
 </main>
 </div>
@@ -1152,6 +1230,119 @@ function closeGoogleModal(){document.getElementById('gOverlay').classList.remove
 function doLogout(){
   if(typeof window.googleSignOut==='function'){window.googleSignOut();}
   else{currentUser=null;sessionStorage.removeItem('stk_user');renderAuth();}
+}
+
+// ── MONTE CARLO ──
+(function(){
+  const inp=document.getElementById('mcSym');
+  const drop=document.getElementById('mcSDrop');
+  inp.addEventListener('input',function(){
+    const q=this.value.trim().toUpperCase();
+    if(!q){drop.classList.remove('open');return;}
+    const hits=STOCKS.filter(s=>s.sym.includes(q)||s.name.toUpperCase().includes(q)).slice(0,8);
+    if(!hits.length){drop.classList.remove('open');return;}
+    drop.innerHTML=hits.map(s=>`<div class="sdr" onclick="mcPick('${s.sym}')">
+      <div class="sdr-l"><span class="sdr-sym">${s.sym}</span><span class="sdr-name">${s.name}</span></div>
+    </div>`).join('');
+    drop.classList.add('open');
+  });
+  document.addEventListener('click',e=>{if(!e.target.closest('.mc-sym-wrap'))drop.classList.remove('open');});
+})();
+window.mcPick=function(sym){
+  document.getElementById('mcSym').value=sym;
+  document.getElementById('mcSDrop').classList.remove('open');
+};
+window.runMonteCarlo=async function(){
+  const sym=document.getElementById('mcSym').value.trim().toUpperCase();
+  const days=document.getElementById('mcDays').value;
+  const sims=document.getElementById('mcSims').value;
+  if(!sym){alert('Enter a stock symbol first');return;}
+  document.getElementById('mcEmpty').style.display='none';
+  document.getElementById('mcResult').style.display='none';
+  document.getElementById('mcLoading').style.display='block';
+  document.getElementById('mcRunBtn').disabled=true;
+  try{
+    const res=await fetch(API_BASE+'/api/montecarlo?sym='+encodeURIComponent(sym)+'&days='+days+'&sims='+sims);
+    const data=await res.json();
+    document.getElementById('mcLoading').style.display='none';
+    document.getElementById('mcRunBtn').disabled=false;
+    if(data.error){alert('Error: '+data.error);document.getElementById('mcEmpty').style.display='block';return;}
+    document.getElementById('mcResult').style.display='block';
+    const s=data.stats;
+    document.getElementById('mcTitle').textContent=data.sym+' — '+days+'-Day Monte Carlo ('+sims+' paths)';
+    document.getElementById('mcSub').textContent='Current ₹'+fp(data.last_price)+' · Annual drift '+(data.mu*100).toFixed(2)+'% · Annual volatility '+(data.sigma*100).toFixed(2)+'%';
+    requestAnimationFrame(()=>renderMCChart(data));
+    document.getElementById('mcStats').innerHTML=[
+      {label:'Expected Price (median)',val:'₹'+fp(s.median),cls:s.median>=data.last_price?'pos':'neg'},
+      {label:'Probability of Gain',val:s.prob_gain+'%',cls:s.prob_gain>=50?'pos':'neg'},
+      {label:'Best Case (95th pct)',val:'₹'+fp(s.p95),cls:'pos'},
+      {label:'Worst Case (5th pct)',val:'₹'+fp(s.p5),cls:'neg'},
+      {label:'Annual Return (μ)',val:(data.mu*100).toFixed(2)+'%',cls:data.mu>=0?'pos':'neg'},
+      {label:'Annual Volatility (σ)',val:(data.sigma*100).toFixed(2)+'%',cls:''},
+    ].map(it=>`<div class="mc-stat"><div class="mc-stat-label">${it.label}</div><div class="mc-stat-val ${it.cls}">${it.val}</div></div>`).join('');
+  }catch(e){
+    document.getElementById('mcLoading').style.display='none';
+    document.getElementById('mcRunBtn').disabled=false;
+    document.getElementById('mcEmpty').style.display='block';
+    alert('Simulation failed: '+e.message);
+  }
+};
+function renderMCChart(data){
+  const canvas=document.getElementById('mcCanvas');
+  const W=canvas.parentElement.offsetWidth||800;
+  const H=window.innerWidth<=640?260:380;
+  canvas.width=W; canvas.height=H; canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');
+  const {bands,sample_paths:sPaths,t_indices:tIdx,last_price:last,days}=data;
+  const PAD={l:72,r:16,t:18,b:34};
+  const cW=W-PAD.l-PAD.r, cH=H-PAD.t-PAD.b;
+  const allP=bands.flatMap(b=>[b.p5,b.p95]);allP.push(last);
+  const minP=Math.min(...allP)*0.97, maxP=Math.max(...allP)*1.03;
+  const xS=i=>PAD.l+(tIdx[i]/days)*cW;
+  const yS=p=>PAD.t+cH-((p-minP)/(maxP-minP))*cH;
+  // Background
+  ctx.fillStyle='#060e1c'; ctx.fillRect(0,0,W,H);
+  // Grid
+  for(let i=0;i<=5;i++){
+    const y=PAD.t+(cH/5)*i;
+    ctx.strokeStyle='rgba(0,229,255,0.06)'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(PAD.l,y); ctx.lineTo(W-PAD.r,y); ctx.stroke();
+    const price=maxP-(maxP-minP)*(i/5);
+    ctx.fillStyle='rgba(220,232,255,0.38)'; ctx.font='10px JetBrains Mono,monospace'; ctx.textAlign='right';
+    ctx.fillText('₹'+price.toLocaleString('en-IN',{maximumFractionDigits:0}),PAD.l-5,y+4);
+  }
+  [0,0.25,0.5,0.75,1].forEach(f=>{
+    ctx.fillStyle='rgba(220,232,255,0.38)'; ctx.textAlign='center'; ctx.font='10px JetBrains Mono,monospace';
+    ctx.fillText('d'+Math.round(f*days),PAD.l+f*cW,H-8);
+  });
+  // P5-P95 fill
+  ctx.beginPath();
+  bands.forEach((b,i)=>i===0?ctx.moveTo(xS(i),yS(b.p95)):ctx.lineTo(xS(i),yS(b.p95)));
+  for(let i=bands.length-1;i>=0;i--)ctx.lineTo(xS(i),yS(bands[i].p5));
+  ctx.closePath(); ctx.fillStyle='rgba(0,229,255,0.055)'; ctx.fill();
+  // P25-P75 fill
+  ctx.beginPath();
+  bands.forEach((b,i)=>i===0?ctx.moveTo(xS(i),yS(b.p75)):ctx.lineTo(xS(i),yS(b.p75)));
+  for(let i=bands.length-1;i>=0;i--)ctx.lineTo(xS(i),yS(bands[i].p25));
+  ctx.closePath(); ctx.fillStyle='rgba(0,229,255,0.14)'; ctx.fill();
+  // Sample paths
+  ctx.lineWidth=0.6;
+  sPaths.forEach(path=>{
+    ctx.beginPath();
+    path.forEach((p,i)=>i===0?ctx.moveTo(xS(i),yS(p)):ctx.lineTo(xS(i),yS(p)));
+    ctx.strokeStyle='rgba(200,220,255,0.07)'; ctx.stroke();
+  });
+  // Current price dashed
+  ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(255,215,64,0.55)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(PAD.l,yS(last)); ctx.lineTo(W-PAD.r,yS(last)); ctx.stroke();
+  ctx.setLineDash([]);
+  // Median
+  ctx.beginPath();
+  bands.forEach((b,i)=>i===0?ctx.moveTo(xS(i),yS(b.p50)):ctx.lineTo(xS(i),yS(b.p50)));
+  ctx.strokeStyle='#00e5ff'; ctx.lineWidth=2; ctx.stroke();
+  // Start dot
+  ctx.beginPath(); ctx.arc(xS(0),yS(last),4.5,0,Math.PI*2);
+  ctx.fillStyle='#ffd740'; ctx.fill();
 }
 
 // ── SIMULATION (fallback when API unavailable) ──

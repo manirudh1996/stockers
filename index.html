@@ -466,10 +466,29 @@ tbody tr:hover td{background:var(--surface2)}
   </div>
 </div>
 
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js';
+import{getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
+const _app=initializeApp({
+  apiKey:'AIzaSyBuFkSWyrCQIsSR35pCa6dr9tx6U588LZc',
+  authDomain:'stockers-2c553.firebaseapp.com',
+  projectId:'stockers-2c553',
+  storageBucket:'stockers-2c553.firebasestorage.app',
+  messagingSenderId:'434611753260',
+  appId:'1:434611753260:web:465f3fcae888da94e3dc89'
+});
+const _auth=getAuth(_app);
+const _provider=new GoogleAuthProvider();
+window.googleSignIn=async()=>{try{await signInWithPopup(_auth,_provider);}catch(e){if(e.code!=='auth/popup-closed-by-user')console.error('Sign-in:',e.message);}};
+window.googleSignOut=async()=>{try{await signOut(_auth);}catch(e){console.error(e);}};
+onAuthStateChanged(_auth,user=>{
+  window._fbUser=user?{name:user.displayName||user.email.split('@')[0],email:user.email,photo:user.photoURL}:null;
+  if(typeof window.renderAuth==='function')window.renderAuth();
+});
+</script>
+
 <script>
 // ── CONFIG ──
-// Set this to your Render backend URL after deploying, e.g.:
-// const API_BASE = 'https://stockers-api.onrender.com';
 const API_BASE = window.STOCKERS_API_URL || '';
 const hmH=b=>window.innerWidth<=640?Math.round(b*.62):b;
 
@@ -1093,16 +1112,20 @@ function updateClock(){
 
 // ── AUTH ──
 function renderAuth(){
+  const u=window._fbUser||currentUser;
   const zone=document.getElementById('authZone');
-  if(currentUser){
-    const initial=currentUser.name.charAt(0).toUpperCase();
-    const hue=(currentUser.name.charCodeAt(0)*37)%360;
+  if(u){
+    const initial=u.name.charAt(0).toUpperCase();
+    const hue=(u.name.charCodeAt(0)*37)%360;
+    const ava=u.photo
+      ?`<img src="${u.photo}" width="30" height="30" style="border-radius:50%;border:1px solid var(--cyan);display:block" referrerpolicy="no-referrer">`
+      :`<div class="user-ava" style="background:hsl(${hue},60%,55%)">${initial}</div>`;
     zone.innerHTML=`<div class="user-zone" onclick="toggleUserMenu()">
-      <div class="user-ava" style="background:hsl(${hue},60%,55%)">${initial}</div>
-      <span class="user-name">${currentUser.name}</span>
+      ${ava}
+      <span class="user-name">${u.name}</span>
       <span style="color:var(--text3);font-size:10px">▾</span>
       <div class="user-menu" id="userMenu">
-        <div class="user-menu-item">👤 ${currentUser.email}</div>
+        <div class="user-menu-item">👤 ${u.email}</div>
         <div class="user-menu-item">⭐ My Watchlist (${watchlist.length})</div>
         <div class="user-menu-item" onclick="doLogout()">🚪 Sign Out</div>
       </div>
@@ -1115,15 +1138,15 @@ function renderAuth(){
   }
 }
 function toggleUserMenu(){const m=document.getElementById('userMenu');if(m)m.classList.toggle('open');}
-function openGoogleModal(){document.getElementById('gOverlay').classList.add('open');document.getElementById('gModal').classList.add('open');}
-function closeGoogleModal(){document.getElementById('gOverlay').classList.remove('open');document.getElementById('gModal').classList.remove('open');}
-function doGoogleLogin(){
-  const email=document.getElementById('gEmailInput').value.trim()||'trader@gmail.com';
-  const name=email.split('@')[0].replace(/\./g,' ').replace(/\b\w/g,l=>l.toUpperCase());
-  currentUser={name,email};sessionStorage.setItem('stk_user',JSON.stringify(currentUser));
-  closeGoogleModal();renderAuth();
+function openGoogleModal(){
+  if(typeof window.googleSignIn==='function'){window.googleSignIn();}
+  else{document.getElementById('gOverlay').classList.add('open');document.getElementById('gModal').classList.add('open');}
 }
-function doLogout(){currentUser=null;sessionStorage.removeItem('stk_user');renderAuth();}
+function closeGoogleModal(){document.getElementById('gOverlay').classList.remove('open');document.getElementById('gModal').classList.remove('open');}
+function doLogout(){
+  if(typeof window.googleSignOut==='function'){window.googleSignOut();}
+  else{currentUser=null;sessionStorage.removeItem('stk_user');renderAuth();}
+}
 
 // ── SIMULATION (fallback when API unavailable) ──
 function simulatePrices(){

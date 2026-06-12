@@ -261,6 +261,7 @@ tbody tr:hover td{background:var(--surface2)}
 .mc-sym-wrap input::placeholder{color:var(--text3)}
 .mc-sel{padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;cursor:pointer;transition:border-color .2s}
 .mc-sel:focus{border-color:var(--cyan)}
+.mc-sel option{color:#111;background:#fff}
 .mc-run{padding:8px 22px;background:var(--cyan-dim);border:1px solid rgba(0,229,255,0.3);border-radius:9px;color:var(--cyan);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
 .mc-run:hover{background:var(--cyan-glow)}
 .mc-run:disabled{opacity:.45;cursor:not-allowed}
@@ -278,6 +279,12 @@ tbody tr:hover td{background:var(--surface2)}
 .mc-disclaimer{font-size:11px;color:var(--text3);font-style:italic;margin-top:6px}
 .mc-empty{text-align:center;padding:80px 20px}
 .mc-empty-icon{font-size:48px;margin-bottom:16px}
+.strategy-guide{background:rgba(0,229,255,0.03);border:1px solid rgba(0,229,255,0.09);border-radius:10px;padding:12px 16px;margin:12px 0 4px}
+.sg-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:10px}
+.sg-items{display:flex;flex-direction:column;gap:6px}
+.sg-item{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);line-height:1.4}
+.sg-swatch{display:inline-block;width:26px;min-width:26px;border-radius:2px}
+.sg-dot{display:inline-block;width:12px;height:12px;min-width:12px;border-radius:50%}
 
 /* MOBILE */
 @media(max-width:640px){
@@ -501,6 +508,17 @@ tbody tr:hover td{background:var(--surface2)}
       <button class="mc-run" id="mcRunBtn" onclick="runMonteCarlo()">▶ Simulate</button>
     </div>
 
+    <div class="strategy-guide">
+      <div class="sg-title">How to read this chart</div>
+      <div class="sg-items">
+        <div class="sg-item"><span class="sg-swatch" style="background:rgba(0,229,255,0.35);height:10px"></span>Wide band — 5th to 95th percentile: full range of simulated outcomes</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:rgba(0,229,255,0.18);height:10px"></span>Narrow band — 25th to 75th percentile: the most probable price zone</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:#00e5ff;height:2px;border-radius:0"></span>Cyan line — Median path (50th percentile), the central expected outcome</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:#ffd740;height:2px;border-radius:0"></span>Yellow dashed — Current price baseline for comparison</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:rgba(200,220,255,0.12);height:10px"></span>Faint lines — 20 individual randomly simulated price trajectories</div>
+      </div>
+    </div>
+
     <div id="mcEmpty" class="mc-empty">
       <div class="mc-empty-icon">📈</div>
       <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px">Monte Carlo Price Simulation</div>
@@ -548,6 +566,17 @@ tbody tr:hover td{background:var(--surface2)}
         <option value="4">4 States</option>
       </select>
       <button class="mc-run" id="hmmRunBtn" onclick="runHMM()">🔮 Detect Regimes</button>
+    </div>
+
+    <div class="strategy-guide">
+      <div class="sg-title">How to read this chart</div>
+      <div class="sg-items">
+        <div class="sg-item"><span class="sg-dot" style="background:rgba(0,230,118,0.6)"></span><strong style="color:var(--green)">Bull</strong> — Model detects upward momentum; positive avg daily return</div>
+        <div class="sg-item"><span class="sg-dot" style="background:rgba(255,193,7,0.55)"></span><strong style="color:var(--gold)">Neutral</strong> — Sideways or mixed price action; near-zero returns</div>
+        <div class="sg-item"><span class="sg-dot" style="background:rgba(255,82,82,0.6)"></span><strong style="color:var(--red)">Bear</strong> — Downward pressure; negative avg daily return</div>
+        <div class="sg-item"><span style="font-size:14px">🔀</span><span><strong>Transition matrix</strong> — Probability of staying in or switching regime on the next day</span></div>
+        <div class="sg-item"><span style="font-size:14px">🎯</span><span><strong>Current badge</strong> — Regime detected for the most recent trading day</span></div>
+      </div>
     </div>
 
     <div id="hmmEmpty" class="mc-empty">
@@ -1468,7 +1497,7 @@ window.runHMM=async function(){
     badge.className='hmm-regime-badge '+(lbl.toLowerCase().includes('bull')?'bull':lbl.toLowerCase().includes('bear')?'bear':'neutral');
     requestAnimationFrame(()=>renderHMMChart(data));
     // Stats grid — state_stats is a dict keyed by state id; sort by mean_ret_d ascending (Bear→Bull)
-    const statsArr=Object.values(data.state_stats).sort((a,b)=>a.mean_ret_d-b.mean_ret_d);
+    const statsArr=Object.values(data.state_stats).sort((a,b)=>a.mean_ret_d-b.mean_ret_d).filter(s=>s.count>0);
     const cols=statsArr.map(s=>`
       <div class="hmm-stat-card">
         <div class="hmm-regime-badge ${s.label.toLowerCase().includes('bull')?'bull':s.label.toLowerCase().includes('bear')?'bear':'neutral'}" style="margin-bottom:8px">${s.label}</div>
@@ -1478,13 +1507,14 @@ window.runHMM=async function(){
         <div class="mc-stat-row"><span class="mc-stat-label">Avg volatility</span><span class="mc-stat-val">${s.mean_vol_d.toFixed(2)}%</span></div>
       </div>`).join('');
     document.getElementById('hmmStats').innerHTML=cols;
-    // Transition matrix — rows ordered by state id (0,1,2)
-    const stateKeys=Object.keys(data.state_stats).sort((a,b)=>+a-+b);
-    const stateLabels=stateKeys.map(k=>data.state_stats[k].label);
+    // Transition matrix — only show states with actual predictions
+    const activeKeys=Object.keys(data.state_stats).sort((a,b)=>+a-+b).filter(k=>data.state_stats[k].count>0);
+    const activeLabels=activeKeys.map(k=>data.state_stats[k].label);
     const tm=data.trans_matrix;
-    let tbl=`<div class="hmm-trans"><div style="font-size:12px;color:var(--text2);margin-bottom:8px">State Transition Probabilities</div><table><tr><th></th>${stateLabels.map(s=>`<th>${s}</th>`).join('')}</tr>`;
-    tm.forEach((row,i)=>{
-      tbl+=`<tr><td style="color:var(--text2);font-size:11px">${stateLabels[i]||i}</td>${row.map(v=>`<td>${(v*100).toFixed(1)}%</td>`).join('')}</tr>`;
+    let tbl=`<div class="hmm-trans"><div style="font-size:12px;color:var(--text2);margin-bottom:8px">State Transition Probabilities</div><table><tr><th></th>${activeLabels.map(s=>`<th>${s}</th>`).join('')}</tr>`;
+    activeKeys.forEach((ki,i)=>{
+      const row=tm[+ki];
+      tbl+=`<tr><td style="color:var(--text2);font-size:11px">${activeLabels[i]}</td>${activeKeys.map(kj=>`<td>${(row[+kj]*100).toFixed(1)}%</td>`).join('')}</tr>`;
     });
     tbl+=`</table></div>`;
     document.getElementById('hmmTrans').innerHTML=tbl;

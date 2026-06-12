@@ -490,10 +490,10 @@ tbody tr:hover td{background:var(--surface2)}
       <div class="sg-title">How to read this chart</div>
       <div class="sg-items">
         <div class="sg-item"><span class="sg-swatch" style="background:rgba(0,229,255,0.35);height:10px"></span>Wide band — 5th to 95th percentile: full range of simulated outcomes</div>
-        <div class="sg-item"><span class="sg-swatch" style="background:rgba(0,229,255,0.18);height:10px"></span>Narrow band — 25th to 75th percentile: the most probable price zone</div>
-        <div class="sg-item"><span class="sg-swatch" style="background:#00e5ff;height:2px;border-radius:0"></span>Cyan line — Median path (50th percentile), the central expected outcome</div>
-        <div class="sg-item"><span class="sg-swatch" style="background:#ffd740;height:2px;border-radius:0"></span>Yellow dashed — Current price baseline for comparison</div>
-        <div class="sg-item"><span class="sg-swatch" style="background:rgba(200,220,255,0.12);height:10px"></span>Faint lines — 20 individual randomly simulated price trajectories</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:rgba(0,229,255,0.18);height:10px"></span>Outer envelope — 5th–95th percentile: the full statistical range across all 500 simulations</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:#00e5ff;height:2px;border-radius:0"></span>Cyan line — Base Case (50th percentile): the central expected outcome</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:#ffd740;height:2px;border-radius:0"></span>Yellow dashed — Today's entry price for reference</div>
+        <div class="sg-item"><span class="sg-swatch" style="background:rgba(180,210,255,0.3);height:10px"></span>Faint white lines — 20 individual sample paths picked from 500 simulations. Unlike the bands (which show aggregate statistics), each path shows one possible price journey — chaotic, crashing, recovering. Bands hide the messiness; paths reveal it.</div>
       </div>
     </div>
 
@@ -1327,7 +1327,7 @@ function renderMCChart(data){
   const H=window.innerWidth<=640?260:400;
   canvas.width=W; canvas.height=H; canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');
-  const {bands,t_indices:tIdx,last_price:last,days}=data;
+  const {bands,sample_paths:sPaths,t_indices:tIdx,last_price:last,days}=data;
   const PAD={l:76,r:20,t:44,b:36};
   const cW=W-PAD.l-PAD.r, cH=H-PAD.t-PAD.b;
   const allP=bands.flatMap(b=>[b.p25,b.p75]);allP.push(last);
@@ -1359,6 +1359,15 @@ function renderMCChart(data){
   ctx.setLineDash([5,5]); ctx.strokeStyle='rgba(255,215,64,0.5)'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(PAD.l,yS(last)); ctx.lineTo(W-PAD.r,yS(last)); ctx.stroke();
   ctx.setLineDash([]);
+  // Sample paths — individual simulations (faint, drawn before main lines so they sit behind)
+  if(sPaths&&sPaths.length){
+    ctx.lineWidth=0.8;
+    sPaths.forEach(path=>{
+      ctx.beginPath();
+      path.forEach((p,i)=>i===0?ctx.moveTo(xS(i),yS(p)):ctx.lineTo(xS(i),yS(p)));
+      ctx.strokeStyle='rgba(180,210,255,0.13)'; ctx.stroke();
+    });
+  }
   // Bear Case p25 — red
   ctx.beginPath();
   bands.forEach((b,i)=>i===0?ctx.moveTo(xS(i),yS(b.p25)):ctx.lineTo(xS(i),yS(b.p25)));

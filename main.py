@@ -918,6 +918,12 @@ def montecarlo(
         if t_idx[-1] != days:
             t_idx.append(days)
         paths_ds = paths[:, t_idx]
+        # Guard against NaN/Inf from extreme shocks; floor at near-zero
+        paths_ds = np.nan_to_num(paths_ds, nan=last_price, posinf=last_price*10, neginf=0.01)
+
+        final = paths[:, -1]
+        final = np.nan_to_num(final, nan=last_price, posinf=last_price*10, neginf=0.01)
+        final = np.maximum(final, 0.01)
 
         bands = [
             {
@@ -935,7 +941,6 @@ def montecarlo(
         idx_sample   = np.random.choice(sims, min(20, sims), replace=False)
         sample_paths = [[round(float(v), 2) for v in paths[i, t_idx]] for i in idx_sample]
 
-        final = paths[:, -1]
         stats = {
             "mean":      round(float(final.mean()), 2),
             "median":    round(float(np.median(final)), 2),

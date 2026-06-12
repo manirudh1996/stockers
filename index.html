@@ -1517,8 +1517,8 @@ function renderHMMChart(data){
   ctx.fillStyle='#060e1c'; ctx.fillRect(0,0,W,H);
   // Shade regime bands
   let segStart=0;
-  for(let i=1;i<=n;i++){
-    const changed=i===n||timeline[i].state!==timeline[i-1].state;
+  for(let i=1;i<n;i++){
+    const changed=i===n-1||timeline[i].state!==timeline[i-1].state;
     if(changed){
       const lbl=(timeline[segStart].label||'').toLowerCase();
       const color=lbl.includes('bull')?stateColors.bull:lbl.includes('bear')?stateColors.bear:stateColors.neutral;

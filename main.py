@@ -790,6 +790,9 @@ def hmm_regime(
             "Volatility": volatility,
         }).dropna()
 
+        # Remove Inf values that can arise from splits, halts, or extreme gaps
+        df = df.replace([np.inf, -np.inf], np.nan).dropna()
+
         if len(df) < 40:
             return {"error": "Not enough data after feature computation"}
 
@@ -801,7 +804,14 @@ def hmm_regime(
             n_iter=1000,
             random_state=42,
         )
-        model.fit(features)
+        try:
+            model.fit(features)
+        except (ValueError, np.linalg.LinAlgError) as fit_err:
+            return {"error": f"HMM could not fit: {fit_err}"}
+
+        if not model.monitor_.converged:
+            logger.warning(f"HMM {sym}: did not converge in {model.n_iter} iterations — results may be suboptimal")
+
         hidden_states = model.predict(features)
 
         # Auto-label states by ascending mean daily return
@@ -844,7 +854,7 @@ def hmm_regime(
                 "mean_ret_y": round(mean_ret * 252 * 100, 2),
             }
 
-        trans = [[round(float(v), 3) for v in row] for row in model.transmat_.tolist()]
+        trans = [[round(float(v) if np.isfinite(v) else 0.0, 3) for v in row] for row in model.transmat_.tolist()]
         current_state = int(hidden_states[-1])
 
         return {

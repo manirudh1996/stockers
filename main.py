@@ -810,7 +810,12 @@ def hmm_regime(
         labels     = labels_map.get(n_states, ["Bear","Neutral","Bull"])
         state_label = {sorted_by_ret[i]: labels[i] for i in range(n_states)}
 
-        # Timeline for chart
+        # Timeline for chart — downsample to ≤500 points for large periods
+        total = len(df)
+        step  = max(1, total // 500)
+        idxs  = list(range(0, total, step))
+        if idxs[-1] != total - 1:
+            idxs.append(total - 1)  # always include last point
         timeline = [
             {
                 "date":  df.index[i].strftime("%Y-%m-%d"),
@@ -818,22 +823,25 @@ def hmm_regime(
                 "state": int(hidden_states[i]),
                 "label": state_label[hidden_states[i]],
             }
-            for i in range(len(df))
+            for i in idxs
         ]
 
-        # Per-state statistics
+        # Per-state statistics — guard against empty state (NaN → 0)
         state_stats = {}
         for sid, lbl in state_label.items():
-            mask   = hidden_states == sid
-            rets   = df["Returns"].values[mask]
-            vols   = df["Volatility"].values[mask]
+            mask = hidden_states == sid
+            rets = df["Returns"].values[mask]
+            vols = df["Volatility"].values[mask]
+            count = int(mask.sum())
+            mean_ret = float(rets.mean()) if count > 0 else 0.0
+            mean_vol = float(vols.mean()) if count > 0 else 0.0
             state_stats[str(sid)] = {
                 "label":      lbl,
-                "count":      int(mask.sum()),
+                "count":      count,
                 "pct":        round(float(mask.mean() * 100), 1),
-                "mean_ret_d": round(float(rets.mean() * 100), 3),
-                "mean_vol_d": round(float(vols.mean() * 100), 3),
-                "mean_ret_y": round(float(rets.mean() * 252 * 100), 2),
+                "mean_ret_d": round(mean_ret * 100, 3),
+                "mean_vol_d": round(mean_vol * 100, 3),
+                "mean_ret_y": round(mean_ret * 252 * 100, 2),
             }
 
         trans = [[round(float(v), 3) for v in row] for row in model.transmat_.tolist()]

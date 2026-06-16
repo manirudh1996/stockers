@@ -75,10 +75,10 @@ header{display:flex;align-items:center;gap:14px;padding:10px 24px;background:#ff
 #apiStatus.sim{color:var(--gold);background:rgba(255,215,64,0.07);border:1px solid rgba(255,215,64,0.2)}
 
 /* TICKER */
-.ticker-bar{overflow:hidden;background:var(--bg2);border-bottom:1px solid var(--border);padding:6px 0;position:relative}
+.ticker-bar{overflow:hidden;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:7px 0;position:relative}
 .ticker-bar::before,.ticker-bar::after{content:'';position:absolute;top:0;bottom:0;width:60px;z-index:2;pointer-events:none}
-.ticker-bar::before{left:0;background:linear-gradient(to right,var(--bg2),transparent)}
-.ticker-bar::after{right:0;background:linear-gradient(to left,var(--bg2),transparent)}
+.ticker-bar::before{left:0;background:linear-gradient(to right,var(--surface),transparent)}
+.ticker-bar::after{right:0;background:linear-gradient(to left,var(--surface),transparent)}
 .ticker-track{display:flex;animation:tickerscroll 80s linear infinite;white-space:nowrap}
 @keyframes tickerscroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 .ti{display:inline-flex;align-items:center;gap:5px;padding:0 16px;font-family:var(--mono);font-size:11px;border-right:1px solid var(--border)}
@@ -373,8 +373,6 @@ tbody tr:hover td{background:var(--surface2)}
   <div id="authZone"></div>
 </header>
 
-<div class="ticker-bar"><div class="ticker-track" id="tickerTrack"></div></div>
-
 <div class="tabs-nav">
   <button class="tnb on" id="tb-market" onclick="goTab('market')">📊 Market Overview</button>
   <button class="tnb" id="tb-sectors" onclick="goTab('sectors')">🏭 Sectors</button>
@@ -386,6 +384,7 @@ tbody tr:hover td{background:var(--surface2)}
   <!-- MARKET TAB -->
   <div class="tab-pane on" id="pane-market">
     <div class="idx-sel-wrap" id="idxSelector"></div>
+    <div class="ticker-bar"><div class="ticker-track" id="tickerTrack"></div></div>
     <div>
       <div class="sec-hdr">
         <div>

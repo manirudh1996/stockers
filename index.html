@@ -53,8 +53,10 @@ header{display:flex;align-items:center;gap:14px;padding:10px 24px;background:#ff
 .h-idx-lbl{font-size:9px;font-weight:700;color:var(--text2);letter-spacing:.7px;text-transform:uppercase}
 .h-idx-val{font-family:var(--mono);font-size:12px;font-weight:600}
 .h-idx-chg{font-family:var(--mono);font-size:10px}
-.live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.2);border-radius:16px;font-size:10px;font-weight:700;color:var(--green);white-space:nowrap}
+.live-badge{display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,230,118,0.07);border:1px solid rgba(0,230,118,0.2);border-radius:16px;font-size:10px;font-weight:700;color:var(--green);white-space:nowrap;transition:all .3s}
+.live-badge.closed{background:rgba(107,114,128,0.08);border-color:rgba(107,114,128,0.2);color:var(--text3)}
 .pulse{width:6px;height:6px;background:var(--green);border-radius:50%;animation:dotpulse 2s ease-in-out infinite}
+.live-badge.closed .pulse{background:var(--text3);animation:none}
 @keyframes dotpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(1.4)}}
 #clockZone{display:none}
 #vintClock{display:none}
@@ -364,7 +366,7 @@ tbody tr:hover td{background:var(--surface2)}
     <div class="h-idx"><span class="h-idx-lbl">BANK NIFTY</span><span class="h-idx-val" id="hBNK">–</span><span class="h-idx-chg" id="hBNKc">–</span></div>
   </div>
 
-  <div class="live-badge"><span class="pulse"></span>NSE LIVE</div>
+  <div class="live-badge" id="mktBadge"><span class="pulse" id="mktPulse"></span><span id="mktLabel">NSE LIVE</span></div>
 
   <span id="apiStatus" class="sim">SIM</span>
 
@@ -1354,10 +1356,34 @@ setInterval(pollLive,15000); // re-poll every 15s (matches server refresh interv
 
 // ── PARTICLE BG — disabled (white theme) ──
 
+// ── MARKET HOURS (IST = UTC+5:30) ──
+function isMarketOpen(){
+  const now=new Date();
+  const ist=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  const day=ist.getDay(); // 0=Sun,6=Sat
+  if(day===0||day===6)return false;
+  const mins=ist.getHours()*60+ist.getMinutes();
+  return mins>=555&&mins<930; // 9:15 AM to 3:30 PM
+}
+function updateMarketBadge(){
+  const open=isMarketOpen();
+  const badge=document.getElementById('mktBadge');
+  const label=document.getElementById('mktLabel');
+  if(open){
+    badge.classList.remove('closed');
+    label.textContent='NSE LIVE';
+  } else {
+    badge.classList.add('closed');
+    label.textContent='MARKET CLOSED';
+  }
+}
+
 // ── INIT ──
 window.addEventListener('load',async()=>{
   buildTicker();buildIndexSelector();renderMovers();renderSectors();renderWatchlist();renderAuth();
   updateHeaderIndices();
+  updateMarketBadge();
+  setInterval(updateMarketBadge,60000); // re-check every minute
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     buildTreemap(STOCKS.filter(s=>s.idx.includes('n50')),'mainHeatmap',hmH(430));
   }));
